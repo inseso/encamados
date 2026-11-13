@@ -84,6 +84,13 @@
   .firma .linea{position:absolute;left:8%;right:8%;bottom:34px;border-bottom:1px dashed #c3cbc7;pointer-events:none}
   .firma .ayuda{position:absolute;left:0;right:0;bottom:10px;text-align:center;font-size:12px;color:var(--gris);pointer-events:none}
   .ro{background:#f1f4f2;padding:10px;border-radius:8px;font-size:15px}
+  #resultado{position:fixed;inset:0;background:rgba(15,25,20,.6);z-index:30;display:flex;align-items:center;justify-content:center;padding:16px}
+  #resultado.oculto{display:none}
+  #resultado .caja{background:#fff;border-radius:14px;max-width:460px;width:100%;padding:22px 20px;text-align:center}
+  #resultado h2{margin:6px 0 8px;font-size:19px;color:var(--verde)}
+  #resultado p{font-size:15px;line-height:1.45;margin:8px 0}
+  #resultado .resIco{font-size:46px}
+  #resultado .vacio{font-size:12px;color:var(--gris)}
   #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1b1f1d;color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .3s;pointer-events:none;max-width:90%}
   #toast.ver{opacity:1}
 </style>
@@ -277,6 +284,7 @@
     <button class="btn sec" id="cNo">No acepto</button>
   </div>
 </div>
+<div id="resultado" class="oculto" role="dialog" aria-modal="true"><div class="caja" id="resCaja"></div></div>
 <div id="toast"></div>
 
 <script>/*! xlsx.js (C) 2013-present SheetJS -- http://sheetjs.com */
@@ -688,9 +696,11 @@ $("f").onsubmit = async ev => {
       else await fotoDel(id+"_"+k);
     }
   }catch(e){ toast("No hay espacio para guardar las fotos. Exporte y borre registros antiguos."); return; }
-  if(editando){ Object.assign(registros.find(r=>r.id===editando), datos); toast("Registro actualizado"); }
-  else { registros.push({id, fecha: new Date().toISOString(), ...datos}); toast(navigator.onLine ? "✔ Guardado. Enviando al servidor…" : "✔ Guardado en el teléfono. Se enviará al recuperar cobertura."); }
-  persistir(); limpiar(); pintarCuenta(); pintarSync(); sincronizar();
+  let rec;
+  if(editando){ rec = registros.find(r=>r.id===editando); Object.assign(rec, datos); }
+  else { rec = {id, fecha: new Date().toISOString(), ...datos}; registros.push(rec); }
+  persistir(); limpiar(); pintarCuenta(); pintarSync();
+  await enviarAhora(rec);
 };
 let avisoDup = null;
 function confirmarDoble(dup){
@@ -857,6 +867,12 @@ async function iniciarSesion(s){
   if(navigator.onLine){
     const {data, error} = await sb.from("perfiles").select("id,nombre,rol,activo").eq("id", s.user.id).maybeSingle();
     if(!error && data){ perfil = data; try{ localStorage.setItem(CLAVE_PERFIL, JSON.stringify(data)); }catch(e){} }
+    const sinPerfil = (!error && !data) || (error && (error.code==="PGRST116" || /0 rows/i.test(error.details||"")));
+    if(sinPerfil){
+      await sb.auth.signOut().catch(()=>{}); sesion = null; verApp(false);
+      $("lErr").textContent = "Su cuenta no está dada de alta en la base de datos del sistema (no tiene perfil), por lo que no podría guardar registros. Pida al supervisor que la active desde «Usuarios».";
+      return;
+    }
   }
   if(!perfil) perfil = {id:s.user.id, nombre:s.user.email, rol:"tecnico", activo:true};
   if(perfil.activo === false){ await sb.auth.signOut(); verApp(false); $("lErr").textContent = "Su usuario está desactivado. Consulte al supervisor."; return; }
@@ -897,7 +913,17 @@ async function sincronizar(){
   const uid = sesion.user.id;
   try{
     for(const r of registros.filter(r => (!r.uid || r.uid === uid) && r.sync !== "enviado")){
-      try{
+      try{ await enviarUno(r, uid); ok++; }
+      catch(e){ r.sync = "error"; r.errorSync = explicarError(e); }
+      persistir();
+    }
+  } finally {
+    sincronizando = false; pintarSync();
+    if(!$("vLista").classList.contains("oculto")) pintarLista();
+  }
+  if(ok) toast(`☁ ${ok} registro(s) enviados a la base de datos`);
+}
+async function enviarUno(r, uid){
         const rutas = {};
         for(const k of Object.keys(FOTOS)){
           if(!(r.fotos && r.fotos[k])) continue;
@@ -921,15 +947,30 @@ async function sincronizar(){
         for(const q of CAMPOS_Q){ if(q.id==="cobrador_tipo") continue; let v=(r.q||{})[q.id]; if(q.t==="num") v = v && v!=="No recuerda" ? parseInt(v,10) : null; fila[q.id] = v===""||v===undefined ? null : v; }
         const {error} = await sb.from("visitas").upsert(fila, {onConflict:"id"});
         if(error) throw error;
-        r.uid = uid; r.sync = "enviado"; r.enviado = new Date().toISOString(); r.errorSync = ""; ok++;
-      }catch(e){ r.sync = "error"; r.errorSync = explicarError(e); }
-      persistir();
-    }
-  } finally {
-    sincronizando = false; pintarSync();
-    if(!$("vLista").classList.contains("oculto")) pintarLista();
+        r.uid = uid; r.sync = "enviado"; r.enviado = new Date().toISOString(); r.errorSync = "";
+}
+/* Envío inmediato al guardar, con ventana de resultado */
+function ventana(html, botones){
+  $("resCaja").innerHTML = html + `<div style="margin-top:14px">${botones.map((b,i)=>`<button class="btn ${b.sec?"sec":""}" data-i="${i}">${b.t}</button>`).join("")}</div>`;
+  $("resultado").classList.remove("oculto");
+  $("resCaja").querySelectorAll("button[data-i]").forEach(el=>el.onclick=()=>{ const b=botones[+el.dataset.i]; if(!b.mantener) $("resultado").classList.add("oculto"); b.f && b.f(); });
+}
+async function enviarAhora(rec){
+  if(!navigator.onLine){
+    ventana(`<div class="resIco">📴</div><h2>Guardado en el teléfono</h2><p>No hay cobertura. El registro de <b>${esc(rec.nombre)}</b> está a salvo en este teléfono y <b>se enviará solo a la base de datos</b> en cuanto vuelva la conexión.</p>`, [{t:"Entendido"}]);
+    return;
   }
-  if(ok) toast(`☁ ${ok} registro(s) enviados al servidor`);
+  ventana(`<div class="resIco">⏳</div><h2>Enviando a la base de datos…</h2><p>Subiendo los datos, las fotos y las firmas de <b>${esc(rec.nombre)}</b>. No cierre la aplicación.</p>`, []);
+  while(sincronizando) await new Promise(s=>setTimeout(s,300));
+  sincronizando = true;
+  try{
+    await enviarUno(rec, sesion.user.id); persistir(); pintarSync();
+    ventana(`<div class="resIco">✅</div><h2>Guardado en la base de datos del INSESO</h2><p>El registro de <b>${esc(rec.nombre)}</b> (DIP ${esc(rec.dip||"—")}) ya está en el servidor y aparece en el mapa del supervisor.</p><p class="vacio">Referencia: ${esc(rec.id)} · ${new Date().toLocaleString("es-ES")}</p>`, [{t:"Nuevo registro"}]);
+  }catch(e){
+    rec.sync = "error"; rec.errorSync = explicarError(e); persistir(); pintarSync();
+    ventana(`<div class="resIco">⚠️</div><h2>No se pudo guardar en la base de datos</h2><p>El registro de <b>${esc(rec.nombre)}</b> está a salvo en este teléfono, pero el servidor no lo ha aceptado:</p><p class="err" style="font-weight:600">${esc(rec.errorSync)}</p><p>Se reintentará automáticamente cada minuto. Si el mensaje no cambia, envíe una captura de esta pantalla al supervisor.</p>`,
+      [{t:"↻ Reintentar ahora", mantener:true, f:()=>enviarAhora(rec)}, {t:"Cerrar", sec:true}]);
+  } finally { sincronizando = false; }
 }
 $("bSync").onclick = () => { if(!navigator.onLine){ toast("Sin conexión"); return; } registros.forEach(r => { if(r.sync === "error") r.sync = "pendiente"; }); sincronizar(); };
 addEventListener("online", () => sincronizar());
