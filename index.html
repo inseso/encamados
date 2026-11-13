@@ -1090,6 +1090,8 @@ $("bLiberar").onclick = async function(){
   this.dataset.ok=""; this.textContent="🧹 Borrar del teléfono los ya enviados"; pintarLista(); toast(`${ids.size} registro(s) borrados del teléfono (siguen en el servidor)`);
 };
 
+const VERSION_APP = "v13";
+let sinEstadoTel = false;
 /* Seguimiento: posición cada 2 minutos mientras la aplicación está abierta en pantalla */
 function iniciarSeguimiento(){ clearInterval(segTimer); enviarPosicion(); segTimer = setInterval(enviarPosicion, 120000); }
 document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible"){ enviarPosicion(); sincronizar(); } });
@@ -1099,7 +1101,12 @@ function enviarPosicion(){
   navigator.geolocation.getCurrentPosition(async p => {
     let bat = null; try{ if(navigator.getBattery){ bat = Math.round((await navigator.getBattery()).level*100); } }catch(e){}
     if(!navigator.onLine){ $("uPos").textContent = "📡 sin conexión"; return; }
-    const {error} = await sb.from("posiciones").insert({lat:+p.coords.latitude.toFixed(6), lon:+p.coords.longitude.toFixed(6), precision_m:Math.round(p.coords.accuracy), bateria:bat});
+    const base = {lat:+p.coords.latitude.toFixed(6), lon:+p.coords.longitude.toFixed(6), precision_m:Math.round(p.coords.accuracy), bateria:bat};
+    const mios = misRegistros(), pend = mios.filter(r => r.sync !== "enviado"), conErr = pend.filter(r => r.sync === "error" && r.errorSync);
+    const estadoTel = {pendientes: pend.length, ultimo_error: conErr.length ? conErr[conErr.length-1].errorSync.slice(0,500) : null, version_app: VERSION_APP};
+    let {error} = await sb.from("posiciones").insert(sinEstadoTel ? base : {...base, ...estadoTel});
+    if(error && /column|schema cache/i.test(error.message||"")){ sinEstadoTel = true; ({error} = await sb.from("posiciones").insert(base)); }
+    if(pend.length) sincronizar();
     $("uPos").textContent = error ? "📡 error" : "📡 " + new Date().toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"});
   }, () => { $("uPos").textContent = "📡 sin GPS"; }, {enableHighAccuracy:true, maximumAge:60000, timeout:30000});
 }

@@ -844,8 +844,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
       <div class="card">
         <h2>Técnicos</h2>
-        <table><thead><tr><th>Técnico</th><th>Hoy</th><th>Periodo</th><th>Última posición</th></tr></thead><tbody id="tTec"></tbody></table>
-        <div class="vacio" style="margin-top:6px">Pulse un técnico para ver su recorrido del día en el mapa.</div>
+        <table><thead><tr><th>Técnico</th><th>Hoy</th><th>Periodo</th><th>Última posición</th><th>Teléfono</th></tr></thead><tbody id="tTec"></tbody></table>
+        <div id="avisoTel" class="err oculto" style="font-size:13px;margin-top:8px"></div>
+        <div class="vacio" style="margin-top:6px">Pulse un técnico para ver su recorrido del día en el mapa. La columna «Teléfono» indica si quedan registros en el teléfono sin llegar a la base de datos.</div>
       </div>
       <div class="card"><h2>Alertas</h2><div id="lAlert"></div></div>
       <div class="card"><h2>Satisfacción con el INSESO</h2><table><tbody id="tSat"></tbody></table>
@@ -1088,10 +1089,18 @@ function pintarTecnicos(){
   $("tTec").innerHTML = tecs.length ? tecs.map(p=>{
     const u=ultimas.find(x=>x.tecnico_id===p.id), activo = u && (Date.now()-new Date(u.hora))/60000<=15;
     const nh=visitas.filter(v=>v.tecnico_id===p.id && new Date(v.fecha_visita)>=hoy).length, np=fs.filter(v=>v.tecnico_id===p.id).length;
-    return `<tr class="clic" data-id="${p.id}"><td><span class="pto" style="background:${activo?"#1d5fa8":"#c3cbc7"}"></span>${esc(p.nombre)}${p.activo?"":' <span class="tag mal">desactivado</span>'}</td><td>${nh}</td><td>${np}</td><td>${u?haceTxt(u.hora)+(u.bateria!=null?` · 🔋${u.bateria}%`:""):"—"}</td></tr>`;
-  }).join("") : '<tr><td colspan="4" class="vacio">Aún no hay técnicos dados de alta.</td></tr>';
+    const bat = u && u.bateria!=null ? `<br><span class="vacio" title="Valor aproximado que da el navegador del teléfono al enviar la posición (${haceTxt(u.hora)}). Los iPhone no lo facilitan.">🔋 ≈${u.bateria}%</span>` : "";
+    let tel = '<span class="vacio" title="El teléfono aún no ha informado de su estado (versión antigua del formulario o sin conexión)">—</span>';
+    if(u && u.pendientes!=null) tel = u.pendientes>0
+      ? `<span class="tag mal" title="${esc(u.ultimo_error||"Pendientes de envío (sin error registrado: probablemente sin cobertura)")}">⏳ ${u.pendientes} sin enviar</span>${u.ultimo_error?`<div class="err" style="font-size:11px;margin-top:3px;max-width:180px">${esc(u.ultimo_error.slice(0,140))}</div>`:""}`
+      : '<span class="tag" style="background:var(--verde2);color:var(--verde)">☁ al día</span>';
+    return `<tr class="clic" data-id="${p.id}"><td><span class="pto" style="background:${activo?"#1d5fa8":"#c3cbc7"}"></span>${esc(p.nombre)}${p.activo?"":' <span class="tag mal">desactivado</span>'}</td><td>${nh}</td><td>${np}</td><td>${u?haceTxt(u.hora):"—"}${bat}</td><td>${tel}</td></tr>`;
+  }).join("") : '<tr><td colspan="5" class="vacio">Aún no hay técnicos dados de alta.</td></tr>';
   document.querySelectorAll("#tTec tr.clic").forEach(tr=>tr.onclick=()=>verRecorrido(tr.dataset.id));
   $("kCampo").textContent = ultimas.filter(u=>(Date.now()-new Date(u.hora))/60000<=15).length;
+  const atascados = ultimas.filter(u=>u.pendientes>0);
+  $("avisoTel").innerHTML = atascados.length ? `⚠ ${atascados.map(u=>`<b>${esc(u.nombre)}</b> tiene ${u.pendientes} registro(s) en su teléfono sin enviar`).join("; ")}. Pase el ratón sobre la etiqueta roja para ver el motivo.` : "";
+  $("avisoTel").classList.toggle("oculto", !atascados.length);
 }
 function pintarLado(){
   const fs=filtradas(), hoy=inicioDia(hoyISO());
@@ -1225,12 +1234,13 @@ async function pintarUsuarios(){
   const {data, error} = await sb.from("perfiles").select("id,nombre,email,rol,activo").order("rol").order("nombre");
   if(error){ $("tUsu").innerHTML=`<tr><td colspan="5" class="err">${esc(error.message)}</td></tr>`; return; }
   $("tUsu").innerHTML = data.map(u=>{ const yo=u.id===miId;
-    return `<tr data-id="${u.id}"><td>${esc(u.nombre)}${yo?' <span class="tag">usted</span>':''}</td><td>${esc(u.email||"")}</td>
+    return `<tr data-id="${u.id}"><td><input data-c="nombre" value="${esc(u.nombre)}" style="width:100%;min-width:170px" title="Escriba el nombre completo y pulse fuera del recuadro para guardarlo">${yo?' <span class="tag">usted</span>':''}</td><td>${esc(u.email||"")}</td>
       <td><select data-c="rol" ${yo?"disabled":""}><option value="tecnico" ${u.rol==="tecnico"?"selected":""}>Técnico</option><option value="supervisor" ${u.rol==="supervisor"?"selected":""}>Supervisor</option></select></td>
       <td><input type="checkbox" data-c="activo" ${u.activo?"checked":""} ${yo?"disabled":""}></td>
       <td><button class="btn sec peq" data-c="clave">Cambiar</button></td></tr>`; }).join("");
-  document.querySelectorAll("#tUsu [data-c=rol], #tUsu [data-c=activo]").forEach(el=>el.onchange=async()=>{
-    const id=el.closest("tr").dataset.id, campo=el.dataset.c, valor= campo==="activo" ? el.checked : el.value;
+  document.querySelectorAll("#tUsu [data-c=rol], #tUsu [data-c=activo], #tUsu [data-c=nombre]").forEach(el=>el.onchange=async()=>{
+    const id=el.closest("tr").dataset.id, campo=el.dataset.c, valor= campo==="activo" ? el.checked : campo==="nombre" ? el.value.trim().replace(/\s+/g," ") : el.value;
+    if(campo==="nombre" && valor.length<3){ alert("Escriba el nombre completo."); await pintarUsuarios(); return; }
     const {error} = await sb.from("perfiles").update({[campo]:valor}).eq("id",id);
     if(error){ alert("No se pudo guardar: "+error.message); } await pintarUsuarios(); await cargarTodo();
   });
