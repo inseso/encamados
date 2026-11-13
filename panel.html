@@ -726,13 +726,27 @@ svg.leaflet-image-layer.leaflet-interactive path {
   #vivo{font-size:12px;opacity:.9}
   .leaflet-control-layers-toggle{background-image:none!important;display:flex!important;align-items:center;justify-content:center;font-size:20px;text-decoration:none}
   .leaflet-control-layers-toggle::after{content:"🗺️"}
+  #modal{position:fixed;inset:0;background:rgba(15,25,20,.55);z-index:3000;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:30px 12px}
+  #modal.oculto{display:none!important}
+  #modal .caja{background:#fff;border-radius:12px;max-width:860px;width:100%;padding:18px 20px}
+  #modal h2{margin:0 0 10px;color:var(--verde);font-size:17px}
+  #modal h3{margin:18px 0 8px;font-size:14px;color:var(--verde)}
+  .rejilla{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .rejilla label,.campo label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600}
+  .rejilla input,#modal select,#modal td input{padding:8px;border:1px solid var(--borde);border-radius:7px;font-size:14px;font-family:inherit}
+  .roles{display:flex;gap:10px;margin-top:4px}
+  .roles label{flex-direction:row!important;align-items:center;gap:8px;border:1px solid var(--borde);border-radius:8px;padding:8px 12px;font-weight:500!important;cursor:pointer}
+  .roles label:has(input:checked){border-color:var(--verde);background:var(--verde2);font-weight:700!important}
+  .msg{margin-top:10px;padding:9px 11px;border-radius:8px;font-size:14px;background:var(--verde2)}
+  .msg.mal{background:#fbeaea;color:var(--rojo)}
+  .peq{padding:5px 9px;font-size:12px}
   @media (max-width:800px){ #cuerpo{flex-direction:column;height:auto} #mapa{height:60vh} #lado{width:auto;max-width:none;border-left:0} }
 </style>
 </head>
 <body>
 <header>
   <div><h1>Verificación de encamados · Panel de supervisión</h1><div class="sub">INSESO · Servicio de Informática y Transformación Digital</div></div>
-  <div class="der oculto" id="usu"><span id="vivo">● en vivo</span><span id="uNombre"></span><button id="bSalir">Salir</button></div>
+  <div class="der oculto" id="usu"><span id="vivo">● en vivo</span><span id="uNombre"></span><button id="bUsuarios">👥 Usuarios</button><button id="bSalir">Salir</button></div>
 </header>
 
 <div id="login">
@@ -786,6 +800,32 @@ svg.leaflet-image-layer.leaflet-interactive path {
   </div>
 </div>
 <div id="progreso" class="oculto"></div>
+<div id="modal" class="oculto" role="dialog" aria-modal="true">
+  <div class="caja">
+    <div style="display:flex;align-items:center"><h2>Gestión de usuarios</h2><button class="btn sec peq" id="bCerrarM" style="margin-left:auto">✕ Cerrar</button></div>
+    <h3>Nueva cuenta</h3>
+    <form id="fNuevo" autocomplete="off">
+      <div class="rejilla">
+        <label>Nombre completo *<input id="nNombre" required placeholder="Ej.: Francisco Javier Nguema Mba"></label>
+        <label>Correo electrónico *<input id="nEmail" type="email" required placeholder="nombre@inseso.org"></label>
+        <label>Contraseña inicial * (mínimo 8 caracteres)
+          <span style="display:flex;gap:6px"><input id="nClave" required minlength="8" style="flex:1"><button type="button" class="btn sec peq" id="bGenerar">Generar</button></span></label>
+        <div class="campo"><label>Rol de la cuenta *</label>
+          <div class="roles">
+            <label><input type="radio" name="nRol" value="tecnico" checked> 🧑‍🔧 Técnico<br></label>
+            <label><input type="radio" name="nRol" value="supervisor"> 🧭 Supervisor</label>
+          </div>
+          <div class="vacio" style="margin-top:4px">Técnico: rellena el formulario de campo. Supervisor: entra en este panel, ve todo y gestiona usuarios.</div>
+        </div>
+      </div>
+      <button class="btn" id="bCrear" style="margin-top:12px">Crear cuenta</button>
+      <div id="nMsg" class="msg oculto"></div>
+    </form>
+    <h3>Cuentas existentes</h3>
+    <table><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Activa</th><th>Contraseña</th></tr></thead><tbody id="tUsu"></tbody></table>
+    <div class="vacio" style="margin-top:6px">Desactivar una cuenta impide que envíe datos; no borra lo ya registrado. Su propia cuenta no se puede cambiar desde aquí.</div>
+  </div>
+</div>
 
 <script>/* @preserve
  * Leaflet 1.9.4, a JS library for interactive maps. https://leafletjs.com
@@ -1008,6 +1048,60 @@ function suscribir(){
       pintarTecnicosMapa(); pintarTecnicos();
     })
     .subscribe(st => { $("vivo").textContent = st==="SUBSCRIBED" ? "● en vivo" : "○ sin tiempo real (se actualiza cada minuto)"; });
+}
+
+/* ---------- Gestión de usuarios ---------- */
+let miId = null;
+async function llamarFuncion(cuerpo){
+  const {data, error} = await sb.functions.invoke("crear-usuario", {body: cuerpo});
+  if(error){
+    let msg = error.message;
+    try{ const r = error.context; if(r && r.status===404) msg = "La función «crear-usuario» no está instalada en Supabase (ver instrucciones)."; else if(r && r.json){ const j = await r.json(); msg = j.error || msg; } }catch(e){}
+    throw new Error(msg);
+  }
+  if(data && data.error) throw new Error(data.error);
+  return data;
+}
+function msgUsu(t, mal){ const el=$("nMsg"); el.className="msg"+(mal?" mal":""); el.innerHTML=t; }
+$("bUsuarios").onclick = async () => { $("modal").classList.remove("oculto"); await pintarUsuarios(); };
+$("bCerrarM").onclick = () => $("modal").classList.add("oculto");
+$("modal").addEventListener("click", e => { if(e.target.id==="modal") $("modal").classList.add("oculto"); });
+$("bGenerar").onclick = () => { const a="ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"; const r=crypto.getRandomValues(new Uint32Array(10)); $("nClave").value=[...r].map(x=>a[x%a.length]).join(""); };
+$("fNuevo").onsubmit = async ev => {
+  ev.preventDefault();
+  const nombre=$("nNombre").value.trim(), email=$("nEmail").value.trim().toLowerCase(), clave=$("nClave").value, rol=document.querySelector("input[name=nRol]:checked").value;
+  $("bCrear").disabled=true; msgUsu("Creando la cuenta…");
+  try{
+    await llamarFuncion({accion:"crear", nombre, email, clave, rol});
+    msgUsu(`✔ Cuenta de <b>${rol==="supervisor"?"supervisor":"técnico"}</b> creada para <b>${esc(nombre)}</b>. Comunique al usuario, por un canal seguro, su correo <b>${esc(email)}</b> y la contraseña <b>${esc(clave)}</b> <button type="button" class="btn sec peq" id="bCopiar">Copiar</button>`);
+    $("bCopiar").onclick = () => navigator.clipboard.writeText(`Acceso – Verificación de encamados (INSESO)\nFormulario: https://inseso.github.io/encamados/\nCorreo: ${email}\nContraseña: ${clave}`).then(()=>{ $("bCopiar").textContent="Copiado"; }).catch(()=>{});
+    $("fNuevo").reset(); await pintarUsuarios(); await cargarTodo();
+  }catch(e){ msgUsu("✖ "+esc(e.message), true); }
+  finally{ $("bCrear").disabled=false; }
+};
+async function pintarUsuarios(){
+  miId = sesion && sesion.user.id;
+  const {data, error} = await sb.from("perfiles").select("id,nombre,email,rol,activo").order("rol").order("nombre");
+  if(error){ $("tUsu").innerHTML=`<tr><td colspan="5" class="err">${esc(error.message)}</td></tr>`; return; }
+  $("tUsu").innerHTML = data.map(u=>{ const yo=u.id===miId;
+    return `<tr data-id="${u.id}"><td>${esc(u.nombre)}${yo?' <span class="tag">usted</span>':''}</td><td>${esc(u.email||"")}</td>
+      <td><select data-c="rol" ${yo?"disabled":""}><option value="tecnico" ${u.rol==="tecnico"?"selected":""}>Técnico</option><option value="supervisor" ${u.rol==="supervisor"?"selected":""}>Supervisor</option></select></td>
+      <td><input type="checkbox" data-c="activo" ${u.activo?"checked":""} ${yo?"disabled":""}></td>
+      <td><button class="btn sec peq" data-c="clave">Cambiar</button></td></tr>`; }).join("");
+  document.querySelectorAll("#tUsu [data-c=rol], #tUsu [data-c=activo]").forEach(el=>el.onchange=async()=>{
+    const id=el.closest("tr").dataset.id, campo=el.dataset.c, valor= campo==="activo" ? el.checked : el.value;
+    const {error} = await sb.from("perfiles").update({[campo]:valor}).eq("id",id);
+    if(error){ alert("No se pudo guardar: "+error.message); } await pintarUsuarios(); await cargarTodo();
+  });
+  document.querySelectorAll("#tUsu [data-c=clave]").forEach(b=>b.onclick=()=>{
+    const td=b.parentElement, id=b.closest("tr").dataset.id;
+    td.innerHTML=`<span style="display:flex;gap:4px"><input placeholder="Nueva (mín. 8)" style="width:120px"><button class="btn peq">Guardar</button></span>`;
+    const inp=td.querySelector("input"); inp.focus();
+    td.querySelector("button").onclick=async()=>{
+      try{ await llamarFuncion({accion:"clave", id, clave:inp.value}); td.innerHTML='<span class="tag" style="background:var(--verde2);color:var(--verde)">✔ cambiada</span>'; }
+      catch(e){ alert(e.message); }
+    };
+  });
 }
 
 /* ---------- Filtros ---------- */
