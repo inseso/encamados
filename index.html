@@ -53,6 +53,11 @@
   #consent p{font-size:14px;line-height:1.45;margin:8px 0}
   .importe{position:relative}.importe input{padding-right:60px;text-align:right;font-weight:600}
   .importe span{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--gris);font-weight:600}
+  .foto{border:1px dashed var(--borde);border-radius:10px;padding:10px;margin-top:10px}
+  .foto .fcab{font-weight:600;font-size:14px}
+  .foto img{display:block;max-width:100%;max-height:220px;margin-top:8px;border-radius:6px}
+  .foto .finfo{font-size:13px;color:var(--gris);margin-top:4px}
+  .foto label.btn{cursor:pointer}
   #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1b1f1d;color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .3s;pointer-events:none;max-width:90%}
   #toast.ver{opacity:1}
 </style>
@@ -141,7 +146,18 @@
     </div>
 
     <div class="card">
-      <h2>4. Técnico</h2>
+      <h2>4. Fotografías</h2>
+      <p style="margin:0;font-size:14px;color:var(--gris)">Las fotos se comprimen en el teléfono (unos 100–200 KB cada una). La de la casa lleva impresas la fecha, la hora y las coordenadas.</p>
+      <div class="foto" data-t="dipA"><div class="fcab">Documento personal (DIP), anverso *</div><img class="oculto" alt=""><div class="finfo"></div>
+        <label class="btn sec peq">📷 Tomar foto<input type="file" accept="image/*" capture="environment" hidden></label><button type="button" class="btn sec peq quitar oculto">Quitar</button></div>
+      <div class="foto" data-t="dipR"><div class="fcab">Documento personal (DIP), reverso <span class="opc" style="font-weight:400;color:var(--gris)">(opcional)</span></div><img class="oculto" alt=""><div class="finfo"></div>
+        <label class="btn sec peq">📷 Tomar foto<input type="file" accept="image/*" capture="environment" hidden></label><button type="button" class="btn sec peq quitar oculto">Quitar</button></div>
+      <div class="foto" data-t="casa"><div class="fcab">Casa del encamado (fachada con la puerta principal) *</div><img class="oculto" alt=""><div class="finfo"></div>
+        <label class="btn sec peq">📷 Tomar foto<input type="file" accept="image/*" capture="environment" hidden></label><button type="button" class="btn sec peq quitar oculto">Quitar</button></div>
+    </div>
+
+    <div class="card">
+      <h2>5. Técnico</h2>
       <label>Nombre del técnico de IT *</label>
       <input id="tec" required placeholder="Se recuerda para las próximas visitas">
     </div>
@@ -155,7 +171,9 @@
   <div class="card">
     <h2>Enviar los registros</h2>
     <p style="margin:0;font-size:14px;color:var(--gris)">Los registros se guardan en este teléfono, también sin cobertura. Al final de la jornada, expórtelos y envíelos al responsable de la comisión.</p>
-    <button class="btn" id="bExcel">📤 Exportar a Excel</button>
+    <button class="btn" id="bZip">📤 Exportar Excel + fotos (ZIP)</button>
+    <button class="btn sec" id="bExcel">Exportar solo el Excel</button>
+    <p style="margin:10px 0 0;font-size:13px;color:var(--gris)">Las fotos del DIP son datos personales: envíe el ZIP solo por los canales del INSESO y borre los registros del teléfono cuando se confirme la recepción. Exporte al final de cada jornada para que el fichero no sea demasiado grande.</p>
     <button class="btn sec" id="bPend">↻ Detectar localidades pendientes</button>
     <div id="expEstado" class="estado oculto"></div>
   </div>
@@ -361,6 +379,60 @@ function fmtXAF(n){ return (n===""||n===null||isNaN(n)) ? "" : Math.round(n).toS
 function leerXAF(s){ const d = String(s).replace(/[^0-9]/g,""); return d==="" ? null : parseInt(d,10); }
 $("imp").addEventListener("input", ()=>{ const n = leerXAF($("imp").value); $("imp").value = n===null ? "" : fmtXAF(n); });
 
+/* ---------- Fotos: compresión y almacenamiento (IndexedDB) ---------- */
+const FOTOS = {
+  dipA:{max:1400, q:0.65, objetivo:220*1024, etq:"DIP_anverso", req:true},
+  dipR:{max:1400, q:0.65, objetivo:220*1024, etq:"DIP_reverso", req:false},
+  casa:{max:1024, q:0.55, objetivo:160*1024, etq:"casa", req:true, sello:true}
+};
+let fotosForm = {}, dbP = null;
+function db(){ if(!dbP) dbP = new Promise((res,rej)=>{ const r=indexedDB.open("inseso_encamados_fotos",1); r.onupgradeneeded=()=>r.result.createObjectStore("fotos"); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); return dbP; }
+async function idb(modo, fn){ const d=await db(); return new Promise((res,rej)=>{ const tx=d.transaction("fotos",modo); const q=fn(tx.objectStore("fotos")); tx.oncomplete=()=>res(q?q.result:undefined); tx.onerror=()=>rej(tx.error); tx.onabort=()=>rej(tx.error); }); }
+const fotoPut=(k,b)=>idb("readwrite",s=>s.put(b,k)), fotoGet=k=>idb("readonly",s=>s.get(k)), fotoDel=k=>idb("readwrite",s=>s.delete(k)), fotosVaciar=()=>idb("readwrite",s=>s.clear());
+try{ navigator.storage && navigator.storage.persist && navigator.storage.persist(); }catch(e){}
+
+async function cargarImagen(file){
+  try{ return await createImageBitmap(file, {imageOrientation:"from-image"}); }
+  catch(e){ return await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=URL.createObjectURL(file); }); }
+}
+const aBlob = (c,q)=>new Promise(r=>c.toBlob(r,"image/jpeg",q));
+async function comprimir(file, cfg){
+  const img = await cargarImagen(file);
+  const s = Math.min(1, cfg.max/Math.max(img.width,img.height)), w=Math.round(img.width*s), h=Math.round(img.height*s);
+  const c=document.createElement("canvas"); c.width=w; c.height=h; const x=c.getContext("2d");
+  x.drawImage(img,0,0,w,h);
+  if(cfg.sello){
+    const la=$("lat").value, lo=$("lon").value;
+    const txt = new Date().toLocaleString("es-ES",{dateStyle:"short",timeStyle:"short"}) + (la ? `  ·  ${la}, ${lo}` : "");
+    const fs=Math.max(14,Math.round(w/38)), pad=Math.round(fs*0.45);
+    x.font=`600 ${fs}px system-ui,sans-serif`; const tw=x.measureText(txt).width;
+    x.fillStyle="rgba(0,0,0,.6)"; x.fillRect(0,h-fs-pad*2,tw+pad*2,fs+pad*2);
+    x.fillStyle="#fff"; x.textBaseline="bottom"; x.fillText(txt,pad,h-pad);
+  }
+  let q=cfg.q, b=await aBlob(c,q);
+  while(b && b.size>cfg.objetivo && q>0.36){ q-=0.08; b=await aBlob(c,q); }
+  if(!b) throw new Error("toBlob");
+  return b;
+}
+function pintarFoto(t){
+  const el=document.querySelector(`.foto[data-t="${t}"]`), img=el.querySelector("img"), b=fotosForm[t];
+  if(img.src && img.src.startsWith("blob:")) URL.revokeObjectURL(img.src);
+  if(b){ img.src=URL.createObjectURL(b); img.classList.remove("oculto"); el.querySelector(".finfo").textContent=`✔ Foto comprimida: ${Math.round(b.size/1024)} KB`; el.querySelector(".quitar").classList.remove("oculto"); el.querySelector("label").firstChild.textContent="📷 Repetir foto"; }
+  else { img.removeAttribute("src"); img.classList.add("oculto"); el.querySelector(".finfo").textContent=""; el.querySelector(".quitar").classList.add("oculto"); el.querySelector("label").firstChild.textContent="📷 Tomar foto"; }
+}
+document.querySelectorAll(".foto").forEach(el=>{
+  const t=el.dataset.t, inp=el.querySelector("input");
+  inp.onchange = async ()=>{
+    const f=inp.files[0]; inp.value=""; if(!f) return;
+    el.querySelector(".finfo").textContent="Comprimiendo…";
+    try{ fotosForm[t]=await comprimir(f, FOTOS[t]); pintarFoto(t); }
+    catch(e){ el.querySelector(".finfo").textContent="No se pudo procesar la foto. Repítala."; }
+  };
+  el.querySelector(".quitar").onclick=()=>{ fotosForm[t]=null; pintarFoto(t); };
+});
+const nombreFichero = s => (s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\w]+/g,"_").replace(/^_|_$/g,"").slice(0,40);
+function rutaFoto(i, r, t){ return `fotos/${String(i+1).padStart(3,"0")}_${nombreFichero(r.nombre)}_${FOTOS[t].etq}.jpg`; }
+
 /* ---------- Edad y tiempo encamado ---------- */
 function edadA(fn, ref){ if(!fn) return null; const n=new Date(fn+"T00:00:00"), r=ref?new Date(ref):new Date(); let e=r.getFullYear()-n.getFullYear(); const m=r.getMonth()-n.getMonth(); if(m<0||(m===0&&r.getDate()<n.getDate())) e--; return e; }
 $("fnac").max = new Date().toISOString().slice(0,10);
@@ -372,7 +444,7 @@ $("tinv").addEventListener("change", ()=>{ $("dinv").required = $("tinv").value=
 $("tercero").onchange = ()=>{ $("bloqueTercero").classList.toggle("oculto", !$("tercero").checked); $("cobra").required = $("tercero").checked; };
 
 /* ---------- Guardar ---------- */
-$("f").onsubmit = ev => {
+$("f").onsubmit = async ev => {
   ev.preventDefault();
   if(!$("lat").value){ toast("Falta capturar la ubicación"); $("bGps").scrollIntoView({behavior:"smooth",block:"center"}); return; }
   const nom = $("nom").value.trim().replace(/\s+/g," ");
@@ -387,6 +459,7 @@ $("f").onsubmit = ev => {
   if(meses > ed*12){ toast("El tiempo encamado supera la edad: revíselo"); $("tcant").focus(); return; }
   const imp = leerXAF($("imp").value);
   if(imp===null){ toast("Falta el importe en XAF"); $("imp").focus(); return; }
+  for(const [k,c] of Object.entries(FOTOS)) if(c.req && !fotosForm[k]){ toast("Falta la foto: "+c.etq.replace("_"," ")); document.querySelector(`.foto[data-t="${k}"]`).scrollIntoView({behavior:"smooth",block:"center"}); return; }
   const tec = $("tec").value.trim(); try{ localStorage.setItem(CLAVE_TEC, tec); }catch(e){}
   const datos = {
     nombre: nom, importe: imp, fechaNac: fn, tipoInv: $("tinv").value, descInv: $("dinv").value.trim(), mesesEncamado: meses, tiempoTexto: tc+" "+$("tuni").value,
@@ -398,8 +471,16 @@ $("f").onsubmit = ev => {
     locVerificada: !!($("loc").value.trim() && $("locOk").checked), locSugerida: locSugerida,
     provincia: $("prov").value, observaciones: $("obs").value.trim(), tecnico: tec
   };
+  const id = editando || (Date.now().toString(36)+Math.random().toString(36).slice(2,6));
+  datos.fotos = {};
+  try{
+    for(const k of Object.keys(FOTOS)){
+      if(fotosForm[k]){ await fotoPut(id+"_"+k, fotosForm[k]); datos.fotos[k]=Math.round(fotosForm[k].size/1024); }
+      else await fotoDel(id+"_"+k);
+    }
+  }catch(e){ toast("No hay espacio para guardar las fotos. Exporte y borre registros antiguos."); return; }
   if(editando){ Object.assign(registros.find(r=>r.id===editando), datos); toast("Registro actualizado"); }
-  else { registros.push({id: Date.now().toString(36)+Math.random().toString(36).slice(2,6), fecha: new Date().toISOString(), ...datos}); toast("✔ Registro guardado en el teléfono"); }
+  else { registros.push({id, fecha: new Date().toISOString(), ...datos}); toast("✔ Registro guardado en el teléfono"); }
   persistir(); limpiar(); pintarCuenta();
 };
 let avisoDup = null;
@@ -409,6 +490,7 @@ function confirmarDoble(dup){
 }
 function limpiar(){
   pararGps(); $("f").reset(); editando=null; locOrigen=""; locSugerida=""; mejor=null;
+  fotosForm={}; Object.keys(FOTOS).forEach(pintarFoto);
   ["lat","lon"].forEach(i=>{ $(i).value=""; }); delete $("lat").dataset.prec; delete $("lat").dataset.hora;
   $("gpsEstado").classList.add("oculto"); $("mapaLink").innerHTML=""; $("locOrigen").textContent="";
   $("bloqueTercero").classList.add("oculto"); $("cobra").required=false;
@@ -431,6 +513,7 @@ function pintarLista(){
     <div class="reg">
       <b>${i+1}. ${esc(r.nombre)}${r.locOrigen==="pendiente"&&!r.localidad?'<span class="tag">localidad pendiente</span>':''}${r.precision>PREC_OBJ?'<span class="tag">± '+r.precision+' m</span>':''}</b>
       <small>${r.fechaNac?edadA(r.fechaNac,r.fecha)+" años · ":""}${esc(r.tipoInv||"")}${r.tiempoTexto?" · encamado "+esc(r.tiempoTexto):""}</small>
+      <small>Fotos: DIP ${r.fotos&&r.fotos.dipA?"✔":"✘"}${r.fotos&&r.fotos.dipR?" (+reverso)":""} · Casa ${r.fotos&&r.fotos.casa?"✔":"✘"}</small>
       <small>Cobra: ${r.importe!=null?fmtXAF(r.importe)+" XAF":"—"}</small>
       <small>${esc(r.localidad||"—")}${r.provincia?" · "+esc(r.provincia):""}</small>
       ${r.cobra?`<small>Percibe en su nombre: ${esc(r.cobra)}${r.parentesco?" ("+esc(r.parentesco)+")":""}</small>`:""}
@@ -440,7 +523,7 @@ function pintarLista(){
       <button class="btn sec peq" style="color:var(--rojo);border-color:var(--rojo)" onclick="borrar('${r.id}',this)">Borrar</button>
     </div>`).join("");
 }
-function editar(id){
+async function editar(id){
   const r = registros.find(x=>x.id===id); if(!r) return;
   limpiar(); editando = id; verTab("nuevo");
   $("nom").value=r.nombre; $("fnac").value=r.fechaNac||""; $("fnac").dispatchEvent(new Event("change")); $("tinv").value=r.tipoInv||""; $("dinv").value=r.descInv||""; if(r.mesesEncamado!=null){ const [c,u]=(r.tiempoTexto||(r.mesesEncamado+" meses")).split(" "); $("tcant").value=c; $("tuni").value=u; } $("imp").value=fmtXAF(r.importe??""); $("tercero").checked=!!r.cobra; $("tercero").onchange();
@@ -449,21 +532,22 @@ function editar(id){
   $("loc").value=r.localidad; locOrigen=r.locOrigen; $("locOk").checked=!!r.locVerificada; locSugerida=r.locSugerida||""; $("prov").value=r.provincia; $("obs").value=r.observaciones; $("tec").value=r.tecnico;
   $("mapaLink").innerHTML = `<a href="${urlMapa(r.lat,r.lon)}" target="_blank" rel="noopener">Comprobar en el mapa ↗</a> · Precisión ± ${r.precision} m`;
   $("bGps").textContent="📍 Repetir captura"; $("bGuardar").textContent="💾 Guardar cambios";
+  for(const k of Object.keys(FOTOS)){ try{ fotosForm[k]=(await fotoGet(id+"_"+k))||null; }catch(e){ fotosForm[k]=null; } pintarFoto(k); }
 }
 function borrar(id, btn){
   if(btn.dataset.ok!=="1"){ btn.dataset.ok="1"; btn.textContent="¿Seguro? Pulse otra vez"; setTimeout(()=>{btn.dataset.ok="";btn.textContent="Borrar";},4000); return; }
   registros = registros.filter(r=>r.id!==id); persistir(); pintarLista();
+  Object.keys(FOTOS).forEach(k=>fotoDel(id+"_"+k).catch(()=>{}));
 }
 $("bBorrarTodo").onclick = function(){
   if(this.dataset.ok!=="1"){ this.dataset.ok="1"; this.textContent="¿Seguro? Se borrarán "+registros.length+" registros. Pulse otra vez"; setTimeout(()=>{this.dataset.ok="";this.textContent="Borrar todos los registros del teléfono";},5000); return; }
-  registros=[]; persistir(); pintarLista(); this.dataset.ok=""; this.textContent="Borrar todos los registros del teléfono"; toast("Registros borrados");
+  registros=[]; persistir(); pintarLista(); fotosVaciar().catch(()=>{}); this.dataset.ok=""; this.textContent="Borrar todos los registros del teléfono"; toast("Registros borrados");
 };
 
 /* ---------- Exportar a Excel (mismas columnas que la ficha) ---------- */
-$("bExcel").onclick = async () => {
-  if(!registros.length){ toast("No hay registros"); return; }
-  const cab = ["Nº","Nombre completo del encamado","Fecha de nacimiento","Edad","Tipo de invalidez","Descripción de la invalidez","Tiempo encamado (meses)","Importe que cobra (XAF)","Nombre completo de quien cobra por él (si procede)","Latitud puerta principal","Longitud puerta principal","Localidad","Provincia","Ver en mapa","Parentesco de quien cobra","Fecha de visita","Observaciones","Precisión GPS (m)","Hora de captura GPS","Origen de la localidad","Técnico","Localidad confirmada por el técnico","Localidad sugerida por el mapa"];
-  const filas = registros.map((r,i)=>[i+1, r.nombre, r.fechaNac?new Date(r.fechaNac+"T00:00:00"):"", r.fechaNac?edadA(r.fechaNac,r.fecha):"", r.tipoInv||"", r.descInv||"", r.mesesEncamado??"", r.importe??"", r.cobra, r.lat, r.lon, r.localidad, r.provincia, urlMapa(r.lat,r.lon), r.parentesco, new Date(r.fecha), r.observaciones, r.precision, r.horaGps?new Date(r.horaGps):"", r.locOrigen, r.tecnico, r.locVerificada?"Sí":"No", r.locSugerida||""]);
+function crearExcel(){
+  const cab = ["Nº","Nombre completo del encamado","Fecha de nacimiento","Edad","Tipo de invalidez","Descripción de la invalidez","Tiempo encamado (meses)","Importe que cobra (XAF)","Nombre completo de quien cobra por él (si procede)","Latitud puerta principal","Longitud puerta principal","Localidad","Provincia","Ver en mapa","Parentesco de quien cobra","Fecha de visita","Observaciones","Precisión GPS (m)","Hora de captura GPS","Origen de la localidad","Técnico","Localidad confirmada por el técnico","Localidad sugerida por el mapa","Foto DIP anverso","Foto DIP reverso","Foto casa"];
+  const filas = registros.map((r,i)=>[i+1, r.nombre, r.fechaNac?new Date(r.fechaNac+"T00:00:00"):"", r.fechaNac?edadA(r.fechaNac,r.fecha):"", r.tipoInv||"", r.descInv||"", r.mesesEncamado??"", r.importe??"", r.cobra, r.lat, r.lon, r.localidad, r.provincia, urlMapa(r.lat,r.lon), r.parentesco, new Date(r.fecha), r.observaciones, r.precision, r.horaGps?new Date(r.horaGps):"", r.locOrigen, r.tecnico, r.locVerificada?"Sí":"No", r.locSugerida||"", ...Object.keys(FOTOS).map(k=>r.fotos&&r.fotos[k]?rutaFoto(i,r,k):"")]);
   const ws = XLSX.utils.aoa_to_sheet([cab, ...filas], {cellDates:true});
   filas.forEach((f,i)=>{ const c = XLSX.utils.encode_cell({r:i+1,c:13}); ws[c].l = {Target:f[13]};
     const nk="C"+(i+2); if(ws[nk] && f[2]) ws[nk].z="dd/mm/yyyy";
@@ -473,15 +557,51 @@ $("bExcel").onclick = async () => {
   ws["!cols"] = [6,30,13,7,26,30,12,16,30,14,14,22,14,40,18,18,30,10,20,16,22,14,24].map(w=>({wch:w}));
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Registro de encamados");
   const tec = (registros[registros.length-1].tecnico||"tecnico").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^\w]+/g,"_");
-  const nombre = `Encamados_${tec}_${new Date().toISOString().slice(0,10)}.xlsx`;
-  const blob = new Blob([XLSX.write(wb,{bookType:"xlsx",type:"array"})], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+  const base = `Encamados_${tec}_${new Date().toISOString().slice(0,10)}`;
+  return { base, datos: new Uint8Array(XLSX.write(wb,{bookType:"xlsx",type:"array"})) };
+}
+async function compartir(blob, nombre){
   const file = new File([blob], nombre, {type: blob.type});
   try{
-    if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:nombre, text:"Registro de verificación de encamados"}); estado($("expEstado"),"Fichero compartido: "+esc(nombre)); $("expEstado").classList.remove("oculto"); return; }
+    if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:nombre}); $("expEstado").classList.remove("oculto"); estado($("expEstado"),"Fichero compartido: "+esc(nombre)+` (${(blob.size/1048576).toFixed(1)} MB)`); return; }
   }catch(e){ if(e.name==="AbortError") return; }
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
-  $("expEstado").classList.remove("oculto"); estado($("expEstado"),"Fichero descargado: "+esc(nombre)+". Envíelo por correo o WhatsApp al responsable.");
+  $("expEstado").classList.remove("oculto"); estado($("expEstado"),"Fichero descargado: "+esc(nombre)+` (${(blob.size/1048576).toFixed(1)} MB). Envíelo al responsable de la comisión.`);
+}
+$("bExcel").onclick = async () => {
+  if(!registros.length){ toast("No hay registros"); return; }
+  const x = crearExcel();
+  await compartir(new Blob([x.datos],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}), x.base+".xlsx");
+};
+/* ZIP sin compresión (las fotos JPEG ya están comprimidas) */
+const CRC = (()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = c&1 ? 0xEDB88320^(c>>>1) : c>>>1; t[n]=c>>>0; } return t; })();
+function crc32(u){ let c=0xFFFFFFFF; for(let i=0;i<u.length;i++) c=CRC[(c^u[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function crearZip(ficheros){
+  const enc=new TextEncoder(), partes=[], central=[]; let off=0;
+  const d=new Date(), hora=(d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1), dia=((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate();
+  for(const f of ficheros){
+    const n=enc.encode(f.nombre), crc=crc32(f.datos), L=f.datos.length;
+    const h=new DataView(new ArrayBuffer(30)); h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true); h.setUint16(8,0,true); h.setUint16(10,hora,true); h.setUint16(12,dia,true); h.setUint32(14,crc,true); h.setUint32(18,L,true); h.setUint32(22,L,true); h.setUint16(26,n.length,true); h.setUint16(28,0,true);
+    partes.push(new Uint8Array(h.buffer), n, f.datos);
+    const c=new DataView(new ArrayBuffer(46)); c.setUint32(0,0x02014b50,true); c.setUint16(4,20,true); c.setUint16(6,20,true); c.setUint16(8,0x0800,true); c.setUint16(10,0,true); c.setUint16(12,hora,true); c.setUint16(14,dia,true); c.setUint32(16,crc,true); c.setUint32(20,L,true); c.setUint32(24,L,true); c.setUint16(28,n.length,true); c.setUint32(42,off,true);
+    central.push(new Uint8Array(c.buffer), n);
+    off += 30+n.length+L;
+  }
+  const tam = central.reduce((s,p)=>s+p.length,0);
+  const e=new DataView(new ArrayBuffer(22)); e.setUint32(0,0x06054b50,true); e.setUint16(8,ficheros.length,true); e.setUint16(10,ficheros.length,true); e.setUint32(12,tam,true); e.setUint32(16,off,true);
+  return new Blob([...partes, ...central, new Uint8Array(e.buffer)], {type:"application/zip"});
+}
+$("bZip").onclick = async () => {
+  if(!registros.length){ toast("No hay registros"); return; }
+  $("expEstado").classList.remove("oculto"); estado($("expEstado"),"Preparando el ZIP…");
+  const x = crearExcel(), ficheros=[{nombre:x.base+".xlsx", datos:x.datos}];
+  let faltan=0;
+  for(let i=0;i<registros.length;i++){ const r=registros[i];
+    for(const k of Object.keys(FOTOS)){ if(!(r.fotos&&r.fotos[k])) continue;
+      try{ const b=await fotoGet(r.id+"_"+k); if(b) ficheros.push({nombre: rutaFoto(i,r,k), datos:new Uint8Array(await b.arrayBuffer())}); else faltan++; }catch(e){ faltan++; } } }
+  await compartir(crearZip(ficheros), x.base+".zip");
+  if(faltan) toast(`Atención: ${faltan} foto(s) no se encontraron en el teléfono`);
 };
 
 /* ---------- Inicio ---------- */
