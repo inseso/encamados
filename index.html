@@ -98,6 +98,7 @@
         <option>Wele-Nzas</option><option>Djibloho</option>
       </select>
       <button type="button" class="btn sec peq" id="bDetectar">↻ Volver a detectar</button>
+      <label class="chk" style="background:#fff4dc;padding:10px;border-radius:8px"><input type="checkbox" id="locOk"> He comprobado que la localidad es la correcta *</label>
     </div>
 
     <div class="card">
@@ -286,6 +287,7 @@ function fijar(p){
   let txt = `<div class="prec">± ${a} m</div>Ubicación capturada.`;
   let tipo = a<=PREC_OBJ ? "" : "aviso";
   if(a>PREC_OBJ) txt += " La precisión es inferior a la recomendada; se anotará en el registro.";
+  if(a>50){ txt += "<br><b>Lectura poco fiable.</b> Suele ocurrir dentro de edificios o al usar un ordenador (sin GPS). Use el móvil, al aire libre, delante de la puerta, y repita la captura."; tipo="mal"; }
   if(!enGE(la,lo)){ txt += "<br><b>Atención:</b> las coordenadas están fuera de Guinea Ecuatorial. Repita la captura."; tipo="mal"; }
   estado($("gpsEstado"), txt, tipo);
   $("mapaLink").innerHTML = `<a href="${urlMapa(la,lo)}" target="_blank" rel="noopener">Comprobar en el mapa ↗</a>`;
@@ -299,7 +301,7 @@ function normalizarProv(s){
   return PROVINCIAS.find(p => { const n=p.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase(); return q.includes(n) || n.includes(q); }) || "";
 }
 async function geoInversa(la, lo){
-  const u = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${la}&lon=${lo}&zoom=16&addressdetails=1&accept-language=es`;
+  const u = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${la}&lon=${lo}&zoom=18&addressdetails=1&accept-language=es`;
   const ctl = new AbortController(); const t = setTimeout(()=>ctl.abort(), 12000);
   try{
     const r = await fetch(u, {signal: ctl.signal, headers:{"Accept":"application/json"}});
@@ -310,18 +312,34 @@ async function geoInversa(la, lo){
     return { localidad: (loc && ciudad && loc!==ciudad) ? `${loc} (${ciudad})` : loc, provincia: normalizarProv(a.state || a.region || "") };
   } finally { clearTimeout(t); }
 }
+function distM(a,b,c,d){ const R=6371000, r=Math.PI/180, x=(c-a)*r, y=(d-b)*r*Math.cos((a+c)/2*r); return Math.sqrt(x*x+y*y)*R; }
+function locCercana(la, lo){
+  // Localidades confirmadas por el técnico en visitas anteriores, a menos de 250 m
+  let mej=null;
+  for(const r of registros){ if(!r.localidad || !r.locVerificada || r.id===editando) continue;
+    const d=distM(la,lo,r.lat,r.lon); if(d<=250 && (!mej||d<mej.d)) mej={d, loc:r.localidad, prov:r.provincia}; }
+  return mej;
+}
+let locSugerida = "";
 async function detectarLocalidad(la, lo, forzar){
+  $("locOk").checked = false;
   if(!forzar && locOrigen==="manual" && $("loc").value.trim()){ $("locOrigen").textContent="Se mantiene la localidad corregida a mano."; return; }
+  const cerca = locCercana(la, lo);
+  if(cerca){ $("loc").value=cerca.loc; if(cerca.prov) $("prov").value=cerca.prov; locOrigen="registro cercano"; locSugerida="";
+    $("locOrigen").textContent=`✔ Tomada de un registro ya confirmado a ${Math.round(cerca.d)} m. Compruébela y marque la casilla.`;
+    if(navigator.onLine){ try{ const g=await geoInversa(la,lo); locSugerida=g.localidad||""; if(locSugerida && locSugerida!==cerca.loc) $("locOrigen").textContent+=` (El mapa sugiere «${locSugerida}».)`; }catch(e){} }
+    return; }
   if(!navigator.onLine){ locOrigen="pendiente"; $("locOrigen").textContent="Sin conexión: escriba la localidad, o déjela vacía y se detectará al recuperar la cobertura."; return; }
   $("locOrigen").textContent = "Detectando localidad…";
   try{
     const r = await geoInversa(la, lo);
-    if(r.localidad){ $("loc").value = r.localidad; locOrigen="auto"; $("locOrigen").textContent="✔ Detectada automáticamente. Corríjala si no es exacta."; }
+    locSugerida = r.localidad || "";
+    if(r.localidad){ $("loc").value = r.localidad; locOrigen="auto"; $("locOrigen").textContent="Sugerida por el mapa (OpenStreetMap). En Malabo y otras ciudades puede no ser exacta: confírmela con la persona visitada y corríjala si hace falta."; }
     else { locOrigen="pendiente"; $("locOrigen").textContent="El mapa no tiene nombre para este punto. Escriba la localidad."; }
     if(r.provincia) $("prov").value = r.provincia;
   }catch(e){ locOrigen="pendiente"; $("locOrigen").textContent="No se pudo detectar (conexión débil). Escriba la localidad o vuelva a intentarlo."; }
 }
-$("loc").addEventListener("input", ()=>{ locOrigen = $("loc").value.trim() ? "manual" : "pendiente"; $("locOrigen").textContent = locOrigen==="manual" ? "✎ Corregida a mano." : ""; });
+$("loc").addEventListener("input", ()=>{ $("locOk").checked=false;  locOrigen = $("loc").value.trim() ? "manual" : "pendiente"; $("locOrigen").textContent = locOrigen==="manual" ? "✎ Corregida a mano." : ""; });
 $("bDetectar").onclick = ()=>{ if(!$("lat").value){ toast("Primero capture la ubicación"); return; } detectarLocalidad(+$("lat").value, +$("lon").value, true); };
 
 async function detectarPendientes(silencioso){
@@ -360,6 +378,7 @@ $("f").onsubmit = ev => {
   const nom = $("nom").value.trim().replace(/\s+/g," ");
   const dup = registros.find(r => r.nombre.toLowerCase()===nom.toLowerCase() && r.id!==editando);
   if(dup && !confirmarDoble(dup)) return;
+  if($("loc").value.trim() && !$("locOk").checked){ toast("Confirme que la localidad es correcta"); $("locOk").scrollIntoView({behavior:"smooth",block:"center"}); return; }
   const fn = $("fnac").value, ed = edadA(fn);
   if(!fn || ed===null || ed<0 || ed>120){ toast("Revise la fecha de nacimiento"); $("fnac").focus(); return; }
   const tc = parseInt($("tcant").value,10);
@@ -376,6 +395,7 @@ $("f").onsubmit = ev => {
     lat: +$("lat").value, lon: +$("lon").value,
     precision: +($("lat").dataset.prec||0), horaGps: $("lat").dataset.hora || "",
     localidad: $("loc").value.trim(), locOrigen: $("loc").value.trim() ? (locOrigen||"manual") : "pendiente",
+    locVerificada: !!($("loc").value.trim() && $("locOk").checked), locSugerida: locSugerida,
     provincia: $("prov").value, observaciones: $("obs").value.trim(), tecnico: tec
   };
   if(editando){ Object.assign(registros.find(r=>r.id===editando), datos); toast("Registro actualizado"); }
@@ -388,7 +408,7 @@ function confirmarDoble(dup){
   avisoDup = dup.id; toast("Ya existe un registro con ese nombre. Pulse Guardar otra vez para confirmar."); return false;
 }
 function limpiar(){
-  pararGps(); $("f").reset(); editando=null; locOrigen=""; mejor=null;
+  pararGps(); $("f").reset(); editando=null; locOrigen=""; locSugerida=""; mejor=null;
   ["lat","lon"].forEach(i=>{ $(i).value=""; }); delete $("lat").dataset.prec; delete $("lat").dataset.hora;
   $("gpsEstado").classList.add("oculto"); $("mapaLink").innerHTML=""; $("locOrigen").textContent="";
   $("bloqueTercero").classList.add("oculto"); $("cobra").required=false;
@@ -426,7 +446,7 @@ function editar(id){
   $("nom").value=r.nombre; $("fnac").value=r.fechaNac||""; $("fnac").dispatchEvent(new Event("change")); $("tinv").value=r.tipoInv||""; $("dinv").value=r.descInv||""; if(r.mesesEncamado!=null){ const [c,u]=(r.tiempoTexto||(r.mesesEncamado+" meses")).split(" "); $("tcant").value=c; $("tuni").value=u; } $("imp").value=fmtXAF(r.importe??""); $("tercero").checked=!!r.cobra; $("tercero").onchange();
   $("cobra").value=r.cobra; $("par").value=r.parentesco; $("lat").value=r.lat; $("lon").value=r.lon;
   $("lat").dataset.prec=r.precision; $("lat").dataset.hora=r.horaGps;
-  $("loc").value=r.localidad; locOrigen=r.locOrigen; $("prov").value=r.provincia; $("obs").value=r.observaciones; $("tec").value=r.tecnico;
+  $("loc").value=r.localidad; locOrigen=r.locOrigen; $("locOk").checked=!!r.locVerificada; locSugerida=r.locSugerida||""; $("prov").value=r.provincia; $("obs").value=r.observaciones; $("tec").value=r.tecnico;
   $("mapaLink").innerHTML = `<a href="${urlMapa(r.lat,r.lon)}" target="_blank" rel="noopener">Comprobar en el mapa ↗</a> · Precisión ± ${r.precision} m`;
   $("bGps").textContent="📍 Repetir captura"; $("bGuardar").textContent="💾 Guardar cambios";
 }
@@ -442,15 +462,15 @@ $("bBorrarTodo").onclick = function(){
 /* ---------- Exportar a Excel (mismas columnas que la ficha) ---------- */
 $("bExcel").onclick = async () => {
   if(!registros.length){ toast("No hay registros"); return; }
-  const cab = ["Nº","Nombre completo del encamado","Fecha de nacimiento","Edad","Tipo de invalidez","Descripción de la invalidez","Tiempo encamado (meses)","Importe que cobra (XAF)","Nombre completo de quien cobra por él (si procede)","Latitud puerta principal","Longitud puerta principal","Localidad","Provincia","Ver en mapa","Parentesco de quien cobra","Fecha de visita","Observaciones","Precisión GPS (m)","Hora de captura GPS","Origen de la localidad","Técnico"];
-  const filas = registros.map((r,i)=>[i+1, r.nombre, r.fechaNac?new Date(r.fechaNac+"T00:00:00"):"", r.fechaNac?edadA(r.fechaNac,r.fecha):"", r.tipoInv||"", r.descInv||"", r.mesesEncamado??"", r.importe??"", r.cobra, r.lat, r.lon, r.localidad, r.provincia, urlMapa(r.lat,r.lon), r.parentesco, new Date(r.fecha), r.observaciones, r.precision, r.horaGps?new Date(r.horaGps):"", r.locOrigen, r.tecnico]);
+  const cab = ["Nº","Nombre completo del encamado","Fecha de nacimiento","Edad","Tipo de invalidez","Descripción de la invalidez","Tiempo encamado (meses)","Importe que cobra (XAF)","Nombre completo de quien cobra por él (si procede)","Latitud puerta principal","Longitud puerta principal","Localidad","Provincia","Ver en mapa","Parentesco de quien cobra","Fecha de visita","Observaciones","Precisión GPS (m)","Hora de captura GPS","Origen de la localidad","Técnico","Localidad confirmada por el técnico","Localidad sugerida por el mapa"];
+  const filas = registros.map((r,i)=>[i+1, r.nombre, r.fechaNac?new Date(r.fechaNac+"T00:00:00"):"", r.fechaNac?edadA(r.fechaNac,r.fecha):"", r.tipoInv||"", r.descInv||"", r.mesesEncamado??"", r.importe??"", r.cobra, r.lat, r.lon, r.localidad, r.provincia, urlMapa(r.lat,r.lon), r.parentesco, new Date(r.fecha), r.observaciones, r.precision, r.horaGps?new Date(r.horaGps):"", r.locOrigen, r.tecnico, r.locVerificada?"Sí":"No", r.locSugerida||""]);
   const ws = XLSX.utils.aoa_to_sheet([cab, ...filas], {cellDates:true});
   filas.forEach((f,i)=>{ const c = XLSX.utils.encode_cell({r:i+1,c:13}); ws[c].l = {Target:f[13]};
     const nk="C"+(i+2); if(ws[nk] && f[2]) ws[nk].z="dd/mm/yyyy";
     if(ws["H"+(i+2)] && typeof f[7]==="number") ws["H"+(i+2)].z='#,##0 "XAF"';
     ["J","K"].forEach(col=>{ const k=col+(i+2); if(ws[k]) ws[k].z="0.000000"; });
     const fk="P"+(i+2); if(ws[fk]) ws[fk].z="dd/mm/yyyy hh:mm"; const hk="S"+(i+2); if(ws[hk]) ws[hk].z="dd/mm/yyyy hh:mm:ss"; });
-  ws["!cols"] = [6,30,13,7,26,30,12,16,30,14,14,22,14,40,18,18,30,10,20,16,22].map(w=>({wch:w}));
+  ws["!cols"] = [6,30,13,7,26,30,12,16,30,14,14,22,14,40,18,18,30,10,20,16,22,14,24].map(w=>({wch:w}));
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Registro de encamados");
   const tec = (registros[registros.length-1].tecnico||"tecnico").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^\w]+/g,"_");
   const nombre = `Encamados_${tec}_${new Date().toISOString().slice(0,10)}.xlsx`;
