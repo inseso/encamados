@@ -912,12 +912,12 @@ function popupVisita(v){
   const tec=perfiles.get(v.tecnico_id), ed=edad(v.fecha_nacimiento, v.fecha_visita), al=alertasDe(v);
   return `<div class="pop"><b class="t">${esc(v.nombre)}</b>
     ${ed!=null?ed+" años · ":""}${esc(v.tipo_invalidez||"")}${v.meses_encamado!=null?` · encamado ${v.meses_encamado} meses`:""}<br>
-    Cobra: <b>${fmtXAF(v.importe_xaf)}</b>${v.cobra_tercero?`<br>Percibe: ${esc(v.cobra_tercero)}${v.parentesco?" ("+esc(v.parentesco)+")":""}`:""}<br>
+    Importe: <b>${fmtXAF(v.importe_xaf)}</b>${v.cobra_tercero?`<br>Percibe: ${esc(v.cobra_tercero)}${v.parentesco?" ("+esc(v.parentesco)+")":""}`:""}<br>
     ${esc(v.localidad||"—")}${v.provincia?" · "+esc(v.provincia):""}${v.localidad_confirmada?" ✔":""}<br>
     ${fFecha(v.fecha_visita)} · ${esc(tec?tec.nombre:"—")} · GPS ± ${v.precision_m??"?"} m<br>
     DIP <b>${esc(v.dip_numero||"—")}</b>${v.telefono?` · ☎ ${esc(v.telefono)}`:""}<br>
     ${v.fue_funcionario?`Funcionario: ${esc(v.fue_funcionario)}${v.empleador?" · "+esc(v.empleador):""}${v.cargo?" · "+esc(v.cargo):""}<br>`:""}
-    ${v.cobrador_tipo?`Cobra: ${esc(v.cobrador_tipo)} · regular: ${esc(v.cobro_regular||"—")}${v.retrasos==="Sí"?` · <b>retrasos</b>${v.retrasos_detalle?": "+esc(v.retrasos_detalle):""}`:""}<br>`:""}
+    ${v.cobrador_tipo?`Quién cobra: ${esc(v.cobrador_tipo)} · regular: ${esc(v.cobro_regular||"—")}${v.retrasos==="Sí"?` · <b>retrasos</b>${v.retrasos_detalle?": "+esc(v.retrasos_detalle):""}`:""}<br>`:""}
     ${v.satisfaccion?`Satisfacción: <b>${esc(v.satisfaccion)}</b><br>`:""}
     ${v.quejas?`Queja/sugerencia: <i>${esc(v.quejas)}</i><br>`:""}
     ${v.asistencia_medica?`Asistencia médica: ${esc(v.asistencia_medica)} · medicamentos: ${esc(v.medicamentos||"—")}${v.necesita_apoyo==="Sí"?` · <b>necesita apoyo</b>${v.apoyo_detalle?": "+esc(v.apoyo_detalle):""}`:""}<br>`:""}
@@ -1022,7 +1022,7 @@ document.addEventListener("click", ()=>$("mExp").classList.add("oculto"));
 document.querySelectorAll("#mExp button").forEach(b=>b.onclick=()=>exportar(b.dataset.f));
 const CAB = ["Nº","ID visita","Nombre completo del encamado","Fecha de nacimiento","Edad","Tipo de invalidez","Descripción de la invalidez","Tiempo encamado (meses)","Importe que cobra (XAF)","Nombre completo de quien cobra por él (si procede)","Parentesco de quien cobra","Latitud puerta principal","Longitud puerta principal","Precisión GPS (m)","Localidad","Localidad confirmada","Localidad sugerida por el mapa","Provincia","Fecha de visita","Técnico","Observaciones","Alertas","Ver en mapa","Foto DIP anverso","Foto DIP reverso","Foto casa",
   "Número de DIP","Teléfono",
-  "II.1 ¿Fue funcionario de la Administración Pública?","II.2 Ministerio o empresa","II.3 Cargo o función","II.4 Años de servicio","II.5 Fecha de cese o jubilación","II.6 Última vez en activo",
+  "II.1 ¿Fue funcionario de la Administración Pública?","II.2 Ministerio o empresa","II.3 Cargo o función","II.4 Años de servicio","II.5 Desde cuándo está jubilado o cobra la pensión","II.6 Última vez en activo",
   "III.1 Quién cobra la pensión","III.2 Fechas habituales de cobro","III.3 Último pago","III.4 ¿Recibe regularmente la pensión?","III.5 ¿Retrasos o dificultades?","III.5 Detalle",
   "IV.1 Satisfacción con el INSESO","IV.2 Quejas o sugerencias",
   "V.2 Quién le cuida","V.3 ¿Asistencia médica periódica?","V.4 ¿Dispone de medicamentos y cuidados?","V.5 ¿Necesita apoyo adicional?","V.5 Qué apoyo",
