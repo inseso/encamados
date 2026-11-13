@@ -1080,7 +1080,7 @@ function pintarTecnicosMapa(){
   for(const u of ultimas){
     const viejo = (Date.now()-new Date(u.hora))/60000 > 15;
     const ic = L.divIcon({className:"", html:`<div class="tecIcon ${viejo?"viejo":""}">${esc(iniciales(u.nombre))}</div>`, iconSize:[30,30], iconAnchor:[15,15]});
-    L.marker([u.lat,u.lon], {icon:ic, zIndexOffset:1000}).bindPopup(`<div class="pop"><b class="t">${esc(u.nombre)}</b>Última posición: ${haceTxt(u.hora)}<br>${fFecha(u.hora)}<br>Precisión ± ${u.precision_m??"?"} m${u.bateria!=null?` · batería ${u.bateria}%`:""}</div>`).on("click", ()=>verRecorrido(u.tecnico_id)).addTo(capaTec);
+    L.marker([u.lat,u.lon], {icon:ic, zIndexOffset:1000}).bindPopup(`<div class="pop"><b class="t">${esc(u.nombre)}</b>Última posición: ${haceTxt(u.hora)}<br>${fFecha(u.hora)}<br>Precisión ± ${u.precision_m??"?"} m</div>`).on("click", ()=>verRecorrido(u.tecnico_id)).addTo(capaTec);
   }
 }
 function pintarTecnicos(){
@@ -1089,7 +1089,7 @@ function pintarTecnicos(){
   $("tTec").innerHTML = tecs.length ? tecs.map(p=>{
     const u=ultimas.find(x=>x.tecnico_id===p.id), activo = u && (Date.now()-new Date(u.hora))/60000<=15;
     const nh=visitas.filter(v=>v.tecnico_id===p.id && new Date(v.fecha_visita)>=hoy).length, np=fs.filter(v=>v.tecnico_id===p.id).length;
-    const bat = u && u.bateria!=null ? `<br><span class="vacio" title="Valor aproximado que da el navegador del teléfono al enviar la posición (${haceTxt(u.hora)}). Los iPhone no lo facilitan.">🔋 ≈${u.bateria}%</span>` : "";
+    const bat = "";
     let tel = '<span class="vacio" title="El teléfono aún no ha informado de su estado (versión antigua del formulario o sin conexión)">—</span>';
     if(u && u.pendientes!=null) tel = u.pendientes>0
       ? `<span class="tag mal" title="${esc(u.ultimo_error||"Pendientes de envío (sin error registrado: probablemente sin cobertura)")}">⏳ ${u.pendientes} sin enviar</span>${u.ultimo_error?`<div class="err" style="font-size:11px;margin-top:3px;max-width:180px">${esc(u.ultimo_error.slice(0,140))}</div>`:""}`
@@ -1307,9 +1307,9 @@ async function exportar(f){
   if(f==="pos"){
     progreso("Descargando posiciones…");
     const desde=inicioDia($("fDesde").value), hasta=inicioDia($("fHasta").value); hasta.setDate(hasta.getDate()+1);
-    let todo=[], i=0; for(;;){ const {data,error}=await sb.from("posiciones").select("tecnico_id,lat,lon,precision_m,bateria,hora").gte("hora",desde.toISOString()).lt("hora",hasta.toISOString()).order("hora").range(i,i+999); if(error){ alert(error.message); break; } todo=todo.concat(data); if(data.length<1000) break; i+=1000; }
+    let todo=[], i=0; for(;;){ const {data,error}=await sb.from("posiciones").select("tecnico_id,lat,lon,precision_m,hora").gte("hora",desde.toISOString()).lt("hora",hasta.toISOString()).order("hora").range(i,i+999); if(error){ alert(error.message); break; } todo=todo.concat(data); if(data.length<1000) break; i+=1000; }
     progreso("");
-    descargar(new Blob([csv(["Técnico","Latitud","Longitud","Precisión (m)","Batería (%)","Hora"], todo.map(p=>[(perfiles.get(p.tecnico_id)||{}).nombre||p.tecnico_id,p.lat,p.lon,p.precision_m??"",p.bateria??"",p.hora]))],{type:"text/csv;charset=utf-8"}), `Posiciones_${$("fDesde").value}_a_${$("fHasta").value}.csv`);
+    descargar(new Blob([csv(["Técnico","Latitud","Longitud","Precisión (m)","Hora"], todo.map(p=>[(perfiles.get(p.tecnico_id)||{}).nombre||p.tecnico_id,p.lat,p.lon,p.precision_m??"",p.hora]))],{type:"text/csv;charset=utf-8"}), `Posiciones_${$("fDesde").value}_a_${$("fHasta").value}.csv`);
   }
   if(f==="zip"){
     const fich=[{nombre:base+".xlsx", datos:libroExcel(fs)}]; let n=0, fallos=0;
