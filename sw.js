@@ -1,6 +1,6 @@
 // Verificación de encamados INSESO: guarda la página en el teléfono para abrirla sin cobertura.
 // Al publicar una versión nueva, cambie V.
-const PREFIJO = "encamados-", V = PREFIJO + "v28";
+const PREFIJO = "encamados-", V = PREFIJO + "v29";
 self.addEventListener("install", e => { e.waitUntil(caches.open(V).then(c => c.addAll(["./", "./index.html", "./manifest.json", "./icon-180.png", "./icon-192.png", "./icon-512.png"].map(u => new Request(u, {cache: "reload"}))))); self.skipWaiting(); });
 // Solo borra sus propias cachés antiguas, nunca las de la app otras apps
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith(PREFIJO) && k !== V).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
