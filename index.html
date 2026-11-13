@@ -63,6 +63,21 @@
   #usuario{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:13px;gap:8px;flex-wrap:wrap}
   #usuario button{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:10px;padding:3px 10px;font-size:12px}
   .tag.ok{background:#e7f3ec;color:var(--verde)} .tag.mal{background:#fbeaea;color:var(--rojo)}
+  .sec h2{margin-bottom:4px}
+  .preg{margin-top:14px;padding-top:12px;border-top:1px solid #eef1ef}
+  .preg:first-of-type{border-top:0;padding-top:0}
+  .preg .enun{font-weight:600;font-size:15px;margin-bottom:6px}
+  .opciones label{display:flex;align-items:center;gap:10px;font-weight:400;margin:0;padding:9px 10px;border:1px solid var(--borde);border-radius:8px;margin-top:6px;font-size:15px}
+  .opciones label:has(input:checked){border-color:var(--verde);background:var(--verde2);font-weight:600}
+  .opciones input{width:20px;height:20px;margin:0}
+  .detalle{margin-top:8px}
+  .nosabe{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--gris);margin-top:6px}
+  .nosabe input{width:18px;height:18px}
+  .firma{border:1px solid var(--borde);border-radius:8px;margin-top:6px;background:#fff;position:relative}
+  .firma canvas{display:block;width:100%;height:160px;touch-action:none;border-radius:8px}
+  .firma .linea{position:absolute;left:8%;right:8%;bottom:34px;border-bottom:1px dashed #c3cbc7;pointer-events:none}
+  .firma .ayuda{position:absolute;left:0;right:0;bottom:10px;text-align:center;font-size:12px;color:var(--gris);pointer-events:none}
+  .ro{background:#f1f4f2;padding:10px;border-radius:8px;font-size:15px}
   #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1b1f1d;color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .3s;pointer-events:none;max-width:90%}
   #toast.ver{opacity:1}
 </style>
@@ -125,9 +140,13 @@
     </div>
 
     <div class="card">
-      <h2>3. Datos del encamado</h2>
+      <h2>3. I. Datos del beneficiario</h2>
       <label>Nombre completo del encamado *</label>
       <input id="nom" required placeholder="Tal como figura en su documento o expediente">
+      <div class="fila">
+        <div><label>Número de DIP *</label><input id="dip" required autocapitalize="characters" placeholder="Nº del documento"></div>
+        <div><label>Teléfono <span class="opc">(si tiene)</span></label><input id="tel" type="tel" inputmode="tel" placeholder="Ej.: 222 123 456"></div>
+      </div>
       <div class="fila">
         <div><label>Fecha de nacimiento *</label><input id="fnac" type="date" required min="1900-01-01"></div>
         <div><label>Edad</label><input id="edad" readonly placeholder="automática"></div>
@@ -143,28 +162,31 @@
       </select>
       <label>Descripción de la invalidez <span class="opc">(causa, diagnóstico declarado; obligatoria si elige «Otra»)</span></label>
       <input id="dinv" placeholder="Ej.: secuelas de accidente cerebrovascular">
-      <label>Tiempo que lleva encamado *</label>
+      <label>Importe que cobra el encamado *</label>
+      <div class="importe"><input id="imp" required inputmode="numeric" placeholder="0"><span>XAF</span></div>
+      <div class="origen">Escriba solo la cifra, sin puntos ni espacios: se formatea sola.</div>
+    </div>
+
+    <div id="cuestionario"></div>
+
+    <!-- Bloques que el cuestionario coloca en su sitio -->
+    <div id="plantillaCobrador" class="oculto"><div id="bloqueTercero" class="detalle oculto">
+      <label>Nombre completo de quien cobra *</label>
+      <input id="cobra">
+      <label id="lPar">Parentesco o relación con el beneficiario</label>
+      <input id="par" list="parentescos" placeholder="Ej.: hija, esposo, sobrino…">
+      <datalist id="parentescos"><option>Esposo/a</option><option>Hijo/a</option><option>Hermano/a</option><option>Nieto/a</option><option>Sobrino/a</option><option>Tutor/a legal</option><option>Otro familiar</option></datalist>
+    </div></div>
+    <div id="plantillaTiempo" class="oculto"><div id="bloqueTiempo">
       <div class="fila">
         <div><input id="tcant" required inputmode="numeric" placeholder="Cantidad"></div>
         <div><select id="tuni"><option value="meses">meses</option><option value="años">años</option></select></div>
       </div>
-      <label>Importe que cobra el encamado *</label>
-      <div class="importe"><input id="imp" required inputmode="numeric" placeholder="0"><span>XAF</span></div>
-      <div class="origen">Escriba solo la cifra, sin puntos ni espacios: se formatea sola.</div>
-      <label class="chk"><input type="checkbox" id="tercero"> Cobra otra persona en su nombre</label>
-      <div id="bloqueTercero" class="oculto">
-        <label>Nombre completo de quien cobra *</label>
-        <input id="cobra">
-        <label>Parentesco o relación</label>
-        <input id="par" list="parentescos" placeholder="Ej.: hija, esposo, sobrino…">
-        <datalist id="parentescos"><option>Esposo/a</option><option>Hijo/a</option><option>Hermano/a</option><option>Nieto/a</option><option>Sobrino/a</option><option>Tutor/a legal</option><option>Otro familiar</option></datalist>
-      </div>
-      <label>Observaciones <span class="opc">(opcional)</span></label>
-      <textarea id="obs" placeholder="Domicilio cerrado, cambio de domicilio, incidencias…"></textarea>
-    </div>
+      <div class="origen">Tiempo aproximado que lleva encamado.</div>
+    </div></div>
 
     <div class="card">
-      <h2>4. Fotografías</h2>
+      <h2>8. Fotografías</h2>
       <p style="margin:0;font-size:14px;color:var(--gris)">Las fotos se comprimen en el teléfono (unos 100–200 KB cada una). La de la casa lleva impresas la fecha, la hora y las coordenadas.</p>
       <div class="foto" data-t="dipA"><div class="fcab">Documento personal (DIP), anverso *</div><img class="oculto" alt=""><div class="finfo"></div>
         <label class="btn sec peq">📷 Tomar foto<input type="file" accept="image/*" capture="environment" hidden></label><button type="button" class="btn sec peq quitar oculto">Quitar</button></div>
@@ -175,9 +197,26 @@
     </div>
 
     <div class="card">
-      <h2>5. Técnico</h2>
-      <label>Nombre del técnico de IT *</label>
-      <input id="tec" required readonly placeholder="Se toma de su usuario">
+      <h2>9. VI. Observaciones del equipo visitante</h2>
+      <label>Información relevante constatada durante la visita <span class="opc">(opcional)</span></label>
+      <textarea id="obs" style="min-height:110px" placeholder="Estado de la vivienda, situación del beneficiario, incidencias, discrepancias con el expediente…"></textarea>
+    </div>
+
+    <div class="card">
+      <h2>10. VII. Datos de la visita y validación</h2>
+      <div class="fila">
+        <div><label>Fecha de la visita</label><div class="ro" id="vFecha"></div></div>
+        <div><label>Personal visitante</label><input id="tec" required readonly placeholder="Se toma de su usuario"></div>
+      </div>
+      <label>Nombre del beneficiario</label><div class="ro" id="vBenef">—</div>
+      <label style="margin-top:14px">Firma del beneficiario *</label>
+      <label class="nosabe"><input type="checkbox" id="noFirma"> El beneficiario no puede firmar (firma un familiar o representante en su nombre)</label>
+      <div id="bloqueFirmante" class="oculto"><label>Nombre completo de quien firma en su nombre *</label><input id="firmante"></div>
+      <div class="firma" data-t="firmaB"><canvas width="900" height="300"></canvas><div class="linea"></div><div class="ayuda">Firme aquí con el dedo</div></div>
+      <button type="button" class="btn sec peq" data-borrar="firmaB">Borrar firma</button>
+      <label style="margin-top:14px">Firma del responsable de la visita *</label>
+      <div class="firma" data-t="firmaR"><canvas width="900" height="300"></canvas><div class="linea"></div><div class="ayuda">Firme aquí con el dedo</div></div>
+      <button type="button" class="btn sec peq" data-borrar="firmaR">Borrar firma</button>
     </div>
 
     <button type="submit" class="btn" id="bGuardar">💾 Guardar registro</button>
@@ -418,7 +457,9 @@ $("imp").addEventListener("input", ()=>{ const n = leerXAF($("imp").value); $("i
 const FOTOS = {
   dipA:{max:1400, q:0.65, objetivo:220*1024, etq:"DIP_anverso", req:true},
   dipR:{max:1400, q:0.65, objetivo:220*1024, etq:"DIP_reverso", req:false},
-  casa:{max:1024, q:0.55, objetivo:160*1024, etq:"casa", req:true, sello:true}
+  casa:{max:1024, q:0.55, objetivo:160*1024, etq:"casa", req:true, sello:true},
+  firmaB:{firma:true, etq:"firma_beneficiario", nombre:"Firma beneficiario"},
+  firmaR:{firma:true, etq:"firma_responsable", nombre:"Firma responsable"}
 };
 let fotosForm = {}, dbP = null;
 function db(){ if(!dbP) dbP = new Promise((res,rej)=>{ const r=indexedDB.open("inseso_encamados_fotos",1); r.onupgradeneeded=()=>r.result.createObjectStore("fotos"); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); return dbP; }
@@ -450,6 +491,7 @@ async function comprimir(file, cfg){
   return b;
 }
 function pintarFoto(t){
+  if(FOTOS[t].firma){ pintarFirma(t); return; }
   const el=document.querySelector(`.foto[data-t="${t}"]`), img=el.querySelector("img"), b=fotosForm[t];
   if(img.src && img.src.startsWith("blob:")) URL.revokeObjectURL(img.src);
   if(b){ img.src=URL.createObjectURL(b); img.classList.remove("oculto"); el.querySelector(".finfo").textContent=`✔ Foto comprimida: ${Math.round(b.size/1024)} KB`; el.querySelector(".quitar").classList.remove("oculto"); el.querySelector("label").firstChild.textContent="📷 Repetir foto"; }
@@ -468,6 +510,108 @@ document.querySelectorAll(".foto").forEach(el=>{
 const nombreFichero = s => (s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\w]+/g,"_").replace(/^_|_$/g,"").slice(0,40);
 function rutaFoto(i, r, t){ return `fotos/${String(i+1).padStart(3,"0")}_${nombreFichero(r.nombre)}_${FOTOS[t].etq}.jpg`; }
 
+/* ---------- Cuestionario (secciones II a V) ---------- */
+const CUEST = [
+  {sec:"4. II. Historial laboral y administrativo", items:[
+    {id:"fue_funcionario", t:"radio", p:"1. ¿Fue usted funcionario de la Administración Pública?", o:["Sí","No"], req:true},
+    {id:"empleador", t:"text", p:"2. ¿En qué Ministerio o empresa privada trabajó?", ph:"Ministerio, organismo o empresa"},
+    {id:"cargo", t:"text", p:"3. ¿Qué cargo o función desempeñaba?"},
+    {id:"anios_servicio", t:"num", p:"4. ¿Durante cuántos años prestó sus servicios?", suf:"años"},
+    {id:"fecha_cese", t:"mes", p:"5. ¿Cuándo dejó de trabajar o pasó a la situación de jubilación?"},
+    {id:"ultima_actividad", t:"mes", p:"6. ¿Cuándo fue la última vez que estuvo en activo laboralmente?"}]},
+  {sec:"5. III. Situación actual del cobro de la pensión", items:[
+    {id:"cobrador_tipo", t:"radio", p:"1. ¿Quién se encarga actualmente de cobrar su pensión mensual?", o:["El propio beneficiario","Un familiar","Un representante autorizado","Otra persona"], req:true, bloque:"plantillaCobrador"},
+    {id:"fechas_cobro", t:"text", p:"2. ¿En qué fechas suele recibir o cobrar su pensión?", ph:"Ej.: entre el 25 y el 30 de cada mes"},
+    {id:"ultimo_pago", t:"fecha", p:"3. ¿Cuándo recibió su último pago?"},
+    {id:"cobro_regular", t:"radio", p:"4. ¿Recibe regularmente el importe de su pensión?", o:["Sí","No","Algunas veces"], req:true},
+    {id:"retrasos", t:"radio", p:"5. ¿Ha experimentado retrasos, dificultades o inconvenientes en el cobro?", o:["Sí","No"], req:true, det:{si:"Sí", id:"retrasos_detalle", p:"En caso afirmativo, especifique *"}}]},
+  {sec:"6. IV. Valoración y satisfacción del beneficiario", items:[
+    {id:"satisfaccion", t:"radio", p:"1. ¿Está usted satisfecho con el servicio de pago y la atención que recibe del INSESO?", o:["Muy satisfecho","Satisfecho","Poco satisfecho","Insatisfecho"], req:true},
+    {id:"quejas", t:"area", p:"2. ¿Tiene alguna queja, reclamación o sugerencia que desee transmitir al INSESO?", ph:"Anote sus palabras lo más fielmente posible"}]},
+  {sec:"7. V. Situación socioasistencial", items:[
+    {id:"tiempo_encamado", t:"bloque", p:"1. ¿Desde cuándo se encuentra en situación de encamamiento? *", bloque:"plantillaTiempo"},
+    {id:"cuidador", t:"text", p:"2. ¿Quién se ocupa habitualmente de sus cuidados?", ph:"Nombre y relación (ej.: su hija Rosa)"},
+    {id:"asistencia_medica", t:"radio", p:"3. ¿Cuenta con asistencia médica o sanitaria periódica?", o:["Sí","No"], req:true},
+    {id:"medicamentos", t:"radio", p:"4. ¿Dispone de los medicamentos y cuidados necesarios?", o:["Sí","No","Parcialmente"], req:true},
+    {id:"necesita_apoyo", t:"radio", p:"5. ¿Considera que necesita algún tipo de apoyo o asistencia adicional?", o:["Sí","No"], req:true, det:{si:"Sí", id:"apoyo_detalle", p:"En caso afirmativo, indique cuál *"}}]}
+];
+const CAMPOS_Q = CUEST.flatMap(s=>s.items).flatMap(i=> i.t==="bloque" ? [] : i.det ? [i, {id:i.det.id, p:i.det.p.replace(" *","")}] : [i]);
+(function construirCuestionario(){
+  const cont = $("cuestionario");
+  for(const s of CUEST){
+    const card = document.createElement("div"); card.className="card sec";
+    card.innerHTML = `<h2>${esc(s.sec)}</h2>` + s.items.map(i=>{
+      const enun = `<div class="enun">${esc(i.p)}${i.req?" *":""}</div>`;
+      let campo = "";
+      if(i.t==="radio") campo = `<div class="opciones">${i.o.map(o=>`<label><input type="radio" name="q_${i.id}" value="${esc(o)}">${esc(o)}</label>`).join("")}</div>`;
+      else if(i.t==="text") campo = `<input id="q_${i.id}" placeholder="${esc(i.ph||"")}">`;
+      else if(i.t==="area") campo = `<textarea id="q_${i.id}" placeholder="${esc(i.ph||"")}"></textarea>`;
+      else if(i.t==="num") campo = `<div class="importe"><input id="q_${i.id}" inputmode="numeric" placeholder="0"><span>${esc(i.suf||"")}</span></div>`;
+      else if(i.t==="mes"||i.t==="fecha") campo = `<input id="q_${i.id}" type="${i.t==="mes"?"month":"date"}"><label class="nosabe"><input type="checkbox" id="ns_${i.id}"> No recuerda / no sabe</label>`;
+      const det = i.det ? `<div class="detalle oculto" id="det_${i.id}"><label>${esc(i.det.p)}</label><input id="q_${i.det.id}"></div>` : "";
+      return `<div class="preg" id="p_${i.id}">${enun}${campo}${det}<div id="slot_${i.id}"></div></div>`;
+    }).join("");
+    cont.appendChild(card);
+  }
+  for(const i of CUEST.flatMap(s=>s.items)){
+    if(i.bloque) $("slot_"+i.id).appendChild($(i.bloque).firstElementChild);
+    if(i.t==="mes"||i.t==="fecha"){ const ns=$("ns_"+i.id), q=$("q_"+i.id); ns.onchange=()=>{ q.disabled=ns.checked; if(ns.checked) q.value=""; }; }
+    if(i.t==="num") $("q_"+i.id).addEventListener("input", e=>{ e.target.value=e.target.value.replace(/[^0-9]/g,""); });
+    if(i.det) document.querySelectorAll(`input[name=q_${i.id}]`).forEach(r=>r.addEventListener("change", ()=>$("det_"+i.id).classList.toggle("oculto", leerQ(i.id)!==i.det.si)));
+  }
+  document.querySelectorAll("input[name=q_cobrador_tipo]").forEach(r=>r.addEventListener("change", pintarCobrador));
+})();
+function leerQ(id){ const r=document.querySelector(`input[name=q_${id}]:checked`); if(r) return r.value; const el=$("q_"+id); if(!el) return ""; if($("ns_"+id)&&$("ns_"+id).checked) return "No recuerda"; return el.value.trim(); }
+function ponerQ(id, v){
+  const radios=document.querySelectorAll(`input[name=q_${id}]`);
+  if(radios.length){ radios.forEach(r=>{ r.checked = r.value===v; r.dispatchEvent(new Event("change")); }); return; }
+  const el=$("q_"+id); if(!el) return; const ns=$("ns_"+id);
+  if(ns){ ns.checked = v==="No recuerda"; ns.onchange(); if(ns.checked) return; }
+  el.value = v||"";
+}
+function pintarCobrador(){
+  const v=leerQ("cobrador_tipo"), otro = v && v!=="El propio beneficiario";
+  $("bloqueTercero").classList.toggle("oculto", !otro); $("cobra").required = !!otro;
+  $("lPar").textContent = v==="Otra persona" ? "Especifique quién es (relación con el beneficiario) *" : v==="Un representante autorizado" ? "Tipo de representación (poder notarial, tutor legal…)" : "Parentesco con el beneficiario";
+}
+function validarCuestionario(){
+  for(const i of CUEST.flatMap(s=>s.items)){
+    const v = leerQ(i.id);
+    if(i.req && !v) return [i, "Responda: "+i.p];
+    if(i.det && v===i.det.si && !leerQ(i.det.id)) return [i, "Complete: "+i.det.p.replace(" *","")];
+    if(i.t==="mes" && v && v!=="No recuerda" && v > new Date().toISOString().slice(0,7)) return [i, "La fecha no puede ser futura: "+i.p];
+    if(i.t==="fecha" && v && v!=="No recuerda" && v > new Date().toISOString().slice(0,10)) return [i, "La fecha no puede ser futura: "+i.p];
+  }
+  const ct=leerQ("cobrador_tipo");
+  if(ct && ct!=="El propio beneficiario" && !$("cobra").value.trim()) return [{id:"cobrador_tipo"}, "Falta el nombre de quien cobra la pensión"];
+  if(ct==="Otra persona" && !$("par").value.trim()) return [{id:"cobrador_tipo"}, "Especifique quién cobra la pensión"];
+  return null;
+}
+function limpiarCuestionario(){ CAMPOS_Q.forEach(i=>ponerQ(i.id,"")); document.querySelectorAll("[id^=det_]").forEach(d=>d.classList.add("oculto")); pintarCobrador(); }
+
+/* ---------- Firmas ---------- */
+const pads = {};
+document.querySelectorAll(".firma").forEach(el=>{
+  const t=el.dataset.t, cv=el.querySelector("canvas"), x=cv.getContext("2d");
+  const pad = pads[t] = {cv, x, trazos:0};
+  const blanco=()=>{ x.fillStyle="#fff"; x.fillRect(0,0,cv.width,cv.height); };
+  pad.limpiar=()=>{ blanco(); pad.trazos=0; el.querySelector(".ayuda").style.display=""; };
+  pad.limpiar();
+  let dib=false, ult=null;
+  const pos=e=>{ const r=cv.getBoundingClientRect(); return [(e.clientX-r.left)*cv.width/r.width, (e.clientY-r.top)*cv.height/r.height]; };
+  cv.addEventListener("pointerdown", e=>{ dib=true; ult=pos(e); cv.setPointerCapture(e.pointerId); el.querySelector(".ayuda").style.display="none"; x.beginPath(); x.arc(ult[0],ult[1],2,0,7); x.fillStyle="#102a43"; x.fill(); });
+  cv.addEventListener("pointermove", e=>{ if(!dib) return; const p=pos(e); x.strokeStyle="#102a43"; x.lineWidth=4.5; x.lineCap="round"; x.lineJoin="round"; x.beginPath(); x.moveTo(ult[0],ult[1]); x.lineTo(p[0],p[1]); x.stroke(); ult=p; pad.trazos++; });
+  const fin=()=>{ if(!dib) return; dib=false; cv.toBlob(b=>{ if(pad.trazos>3) fotosForm[t]=b; }, "image/jpeg", 0.8); };
+  cv.addEventListener("pointerup", fin); cv.addEventListener("pointercancel", fin);
+});
+document.querySelectorAll("[data-borrar]").forEach(b=>b.onclick=()=>{ const t=b.dataset.borrar; pads[t].limpiar(); fotosForm[t]=null; });
+function pintarFirma(t){
+  const pad=pads[t], b=fotosForm[t]; pad.limpiar();
+  if(b){ createImageBitmap(b).then(img=>{ pad.x.drawImage(img,0,0,pad.cv.width,pad.cv.height); pad.trazos=99; document.querySelector(`.firma[data-t="${t}"] .ayuda`).style.display="none"; }).catch(()=>{}); }
+}
+$("noFirma").onchange = ()=>{ $("bloqueFirmante").classList.toggle("oculto", !$("noFirma").checked); $("firmante").required = $("noFirma").checked; };
+$("nom").addEventListener("input", ()=>{ $("vBenef").textContent = $("nom").value.trim() || "—"; });
+
 /* ---------- Edad y tiempo encamado ---------- */
 function edadA(fn, ref){ if(!fn) return null; const n=new Date(fn+"T00:00:00"), r=ref?new Date(ref):new Date(); let e=r.getFullYear()-n.getFullYear(); const m=r.getMonth()-n.getMonth(); if(m<0||(m===0&&r.getDate()<n.getDate())) e--; return e; }
 $("fnac").max = new Date().toISOString().slice(0,10);
@@ -476,7 +620,7 @@ $("tcant").addEventListener("input", ()=>{ $("tcant").value = $("tcant").value.r
 $("tinv").addEventListener("change", ()=>{ $("dinv").required = $("tinv").value==="Otra"; });
 
 /* ---------- Tercero ---------- */
-$("tercero").onchange = ()=>{ $("bloqueTercero").classList.toggle("oculto", !$("tercero").checked); $("cobra").required = $("tercero").checked; };
+
 
 /* ---------- Guardar ---------- */
 $("f").onsubmit = async ev => {
@@ -492,15 +636,30 @@ $("f").onsubmit = async ev => {
   if(isNaN(tc)){ toast("Falta el tiempo que lleva encamado"); $("tcant").focus(); return; }
   const meses = $("tuni").value==="años" ? tc*12 : tc;
   if(meses > ed*12){ toast("El tiempo encamado supera la edad: revíselo"); $("tcant").focus(); return; }
+  const dip = $("dip").value.trim().toUpperCase().replace(/\s+/g," ");
+  if(!dip){ toast("Falta el número de DIP"); $("dip").focus(); return; }
+  const dupDip = registros.find(r => r.dip && r.dip===dip && r.id!==editando);
+  if(dupDip && !confirmarDoble(dupDip)) return;
+  let tel = $("tel").value.replace(/[^0-9+]/g,"");
+  if(tel){ const cif = tel.replace(/^\+?240/,"").replace(/\D/g,""); if(cif.length!==9){ toast("Revise el teléfono: debe tener 9 cifras"); $("tel").focus(); return; } }
   const imp = leerXAF($("imp").value);
   if(imp===null){ toast("Falta el importe en XAF"); $("imp").focus(); return; }
+  const fq = validarCuestionario();
+  if(fq){ toast(fq[1].length>90 ? fq[1].slice(0,88)+"…" : fq[1]); $("p_"+fq[0].id).scrollIntoView({behavior:"smooth",block:"center"}); return; }
+  if($("noFirma").checked && !$("firmante").value.trim()){ toast("Falta el nombre de quien firma en nombre del beneficiario"); $("firmante").focus(); return; }
+  if(!fotosForm.firmaB){ toast("Falta la firma del beneficiario"); document.querySelector('.firma[data-t="firmaB"]').scrollIntoView({behavior:"smooth",block:"center"}); return; }
+  if(!fotosForm.firmaR){ toast("Falta la firma del responsable de la visita"); document.querySelector('.firma[data-t="firmaR"]').scrollIntoView({behavior:"smooth",block:"center"}); return; }
   for(const [k,c] of Object.entries(FOTOS)) if(c.req && !fotosForm[k]){ toast("Falta la foto: "+c.etq.replace("_"," ")); document.querySelector(`.foto[data-t="${k}"]`).scrollIntoView({behavior:"smooth",block:"center"}); return; }
   if(!sesion){ toast("Sesión cerrada: vuelva a entrar"); return; }
   const tec = $("tec").value.trim();
   const datos = {
     nombre: nom, importe: imp, fechaNac: fn, tipoInv: $("tinv").value, descInv: $("dinv").value.trim(), mesesEncamado: meses, tiempoTexto: tc+" "+$("tuni").value,
-    cobra: $("tercero").checked ? $("cobra").value.trim() : "",
-    parentesco: $("tercero").checked ? $("par").value.trim() : "",
+    dip, tel,
+    cobradorTipo: leerQ("cobrador_tipo"),
+    cobra: leerQ("cobrador_tipo")!=="El propio beneficiario" ? $("cobra").value.trim() : "",
+    parentesco: leerQ("cobrador_tipo")!=="El propio beneficiario" ? $("par").value.trim() : "",
+    q: Object.fromEntries(CAMPOS_Q.map(i=>[i.id, leerQ(i.id)])),
+    noFirma: $("noFirma").checked, firmante: $("noFirma").checked ? $("firmante").value.trim() : "",
     lat: +$("lat").value, lon: +$("lon").value,
     precision: +($("lat").dataset.prec||0), horaGps: $("lat").dataset.hora || "",
     localidad: $("loc").value.trim(), locOrigen: $("loc").value.trim() ? (locOrigen||"manual") : "pendiente",
@@ -530,7 +689,8 @@ function limpiar(){
   fotosForm={}; Object.keys(FOTOS).forEach(pintarFoto);
   ["lat","lon"].forEach(i=>{ $(i).value=""; }); delete $("lat").dataset.prec; delete $("lat").dataset.hora;
   $("gpsEstado").classList.add("oculto"); $("mapaLink").innerHTML=""; $("locOrigen").textContent="";
-  $("bloqueTercero").classList.add("oculto"); $("cobra").required=false;
+  limpiarCuestionario(); $("noFirma").onchange(); $("vBenef").textContent="—";
+  $("vFecha").textContent = new Date().toLocaleDateString("es-ES",{day:"2-digit",month:"long",year:"numeric"});
   restaurarBotonGps(); $("bGuardar").textContent="💾 Guardar registro";
   $("tec").value = perfil ? perfil.nombre : "";
   rellenarLocalidades(); scrollTo(0,0);
@@ -550,6 +710,7 @@ function pintarLista(){
   $("lista").innerHTML = registros.map((r,i)=>`
     <div class="reg">
       <b>${i+1}. ${esc(r.nombre)}${r.sync==="enviado"?'<span class="tag ok">☁ enviado</span>':r.sync==="error"?'<span class="tag mal" title="'+esc(r.errorSync||"")+'">⚠ error de envío</span>':'<span class="tag">⏳ pendiente</span>'}${r.locOrigen==="pendiente"&&!r.localidad?'<span class="tag">localidad pendiente</span>':''}${r.precision>PREC_OBJ?'<span class="tag">± '+r.precision+' m</span>':''}</b>
+      <small>DIP ${esc(r.dip||"—")}${r.tel?" · ☎ "+esc(r.tel):""}</small>
       <small>${r.fechaNac?edadA(r.fechaNac,r.fecha)+" años · ":""}${esc(r.tipoInv||"")}${r.tiempoTexto?" · encamado "+esc(r.tiempoTexto):""}</small>
       <small>Fotos: DIP ${r.fotos&&r.fotos.dipA?"✔":"✘"}${r.fotos&&r.fotos.dipR?" (+reverso)":""} · Casa ${r.fotos&&r.fotos.casa?"✔":"✘"}</small>
       <small>Cobra: ${r.importe!=null?fmtXAF(r.importe)+" XAF":"—"}</small>
@@ -564,7 +725,10 @@ function pintarLista(){
 async function editar(id){
   const r = registros.find(x=>x.id===id); if(!r) return;
   limpiar(); editando = id; verTab("nuevo");
-  $("nom").value=r.nombre; $("fnac").value=r.fechaNac||""; $("fnac").dispatchEvent(new Event("change")); $("tinv").value=r.tipoInv||""; $("dinv").value=r.descInv||""; if(r.mesesEncamado!=null){ const [c,u]=(r.tiempoTexto||(r.mesesEncamado+" meses")).split(" "); $("tcant").value=c; $("tuni").value=u; } $("imp").value=fmtXAF(r.importe??""); $("tercero").checked=!!r.cobra; $("tercero").onchange();
+  $("nom").value=r.nombre; $("fnac").value=r.fechaNac||""; $("fnac").dispatchEvent(new Event("change")); $("tinv").value=r.tipoInv||""; $("dinv").value=r.descInv||""; if(r.mesesEncamado!=null){ const [c,u]=(r.tiempoTexto||(r.mesesEncamado+" meses")).split(" "); $("tcant").value=c; $("tuni").value=u; } $("imp").value=fmtXAF(r.importe??""); $("dip").value=r.dip||""; $("tel").value=r.tel||"";
+  Object.entries(r.q||{}).forEach(([k,v])=>ponerQ(k,v)); if(r.cobradorTipo) ponerQ("cobrador_tipo", r.cobradorTipo); else if(r.cobra) ponerQ("cobrador_tipo","Un familiar"); pintarCobrador();
+  $("noFirma").checked=!!r.noFirma; $("noFirma").onchange(); $("firmante").value=r.firmante||""; $("vBenef").textContent=r.nombre;
+  $("vFecha").textContent=new Date(r.fecha).toLocaleDateString("es-ES",{day:"2-digit",month:"long",year:"numeric"});
   $("cobra").value=r.cobra; $("par").value=r.parentesco; $("lat").value=r.lat; $("lon").value=r.lon;
   $("lat").dataset.prec=r.precision; $("lat").dataset.hora=r.horaGps;
   $("loc").value=r.localidad; locOrigen=r.locOrigen; $("locOk").checked=!!r.locVerificada; locSugerida=r.locSugerida||""; $("prov").value=r.provincia; $("obs").value=r.observaciones; $("tec").value=r.tecnico;
@@ -584,8 +748,10 @@ $("bBorrarTodo").onclick = function(){
 
 /* ---------- Exportar a Excel (mismas columnas que la ficha) ---------- */
 function crearExcel(){
-  const cab = ["Nº","Nombre completo del encamado","Fecha de nacimiento","Edad","Tipo de invalidez","Descripción de la invalidez","Tiempo encamado (meses)","Importe que cobra (XAF)","Nombre completo de quien cobra por él (si procede)","Latitud puerta principal","Longitud puerta principal","Localidad","Provincia","Ver en mapa","Parentesco de quien cobra","Fecha de visita","Observaciones","Precisión GPS (m)","Hora de captura GPS","Origen de la localidad","Técnico","Localidad confirmada por el técnico","Localidad sugerida por el mapa","Foto DIP anverso","Foto DIP reverso","Foto casa"];
-  const filas = registros.map((r,i)=>[i+1, r.nombre, r.fechaNac?new Date(r.fechaNac+"T00:00:00"):"", r.fechaNac?edadA(r.fechaNac,r.fecha):"", r.tipoInv||"", r.descInv||"", r.mesesEncamado??"", r.importe??"", r.cobra, r.lat, r.lon, r.localidad, r.provincia, urlMapa(r.lat,r.lon), r.parentesco, new Date(r.fecha), r.observaciones, r.precision, r.horaGps?new Date(r.horaGps):"", r.locOrigen, r.tecnico, r.locVerificada?"Sí":"No", r.locSugerida||"", ...Object.keys(FOTOS).map(k=>r.fotos&&r.fotos[k]?rutaFoto(i,r,k):"")]);
+  const cab = ["Nº","Nombre completo del encamado","Fecha de nacimiento","Edad","Tipo de invalidez","Descripción de la invalidez","Tiempo encamado (meses)","Importe que cobra (XAF)","Nombre completo de quien cobra por él (si procede)","Latitud puerta principal","Longitud puerta principal","Localidad","Provincia","Ver en mapa","Parentesco de quien cobra","Fecha de visita","Observaciones","Precisión GPS (m)","Hora de captura GPS","Origen de la localidad","Técnico","Localidad confirmada por el técnico","Localidad sugerida por el mapa", ...Object.values(FOTOS).map(c=>c.nombre||("Foto "+c.etq.replace("_"," "))),
+    "Número de DIP","Teléfono","Quién cobra la pensión", ...CAMPOS_Q.filter(i=>i.id!=="cobrador_tipo").map(i=>i.p.replace(/^\d+\.\s*/,"").replace(" *","")), "El beneficiario no puede firmar","Firma en su nombre"];
+  const filas = registros.map((r,i)=>[i+1, r.nombre, r.fechaNac?new Date(r.fechaNac+"T00:00:00"):"", r.fechaNac?edadA(r.fechaNac,r.fecha):"", r.tipoInv||"", r.descInv||"", r.mesesEncamado??"", r.importe??"", r.cobra, r.lat, r.lon, r.localidad, r.provincia, urlMapa(r.lat,r.lon), r.parentesco, new Date(r.fecha), r.observaciones, r.precision, r.horaGps?new Date(r.horaGps):"", r.locOrigen, r.tecnico, r.locVerificada?"Sí":"No", r.locSugerida||"", ...Object.keys(FOTOS).map(k=>r.fotos&&r.fotos[k]?rutaFoto(i,r,k):""),
+    r.dip||"", r.tel||"", r.cobradorTipo||"", ...CAMPOS_Q.filter(q=>q.id!=="cobrador_tipo").map(q=>{ const v=(r.q||{})[q.id]; return q.t==="num"&&v&&v!=="No recuerda"?+v:(v||""); }), r.noFirma?"Sí":"No", r.firmante||""]);
   const ws = XLSX.utils.aoa_to_sheet([cab, ...filas], {cellDates:true});
   filas.forEach((f,i)=>{ const c = XLSX.utils.encode_cell({r:i+1,c:13}); ws[c].l = {Target:f[13]};
     const nk="C"+(i+2); if(ws[nk] && f[2]) ws[nk].z="dd/mm/yyyy";
@@ -725,8 +891,11 @@ async function sincronizar(){
           cobra_tercero: r.cobra || null, parentesco: r.parentesco || null,
           lat: r.lat, lon: r.lon, precision_m: r.precision || null, hora_gps: r.horaGps || null,
           localidad: r.localidad || null, localidad_confirmada: !!r.locVerificada, localidad_sugerida: r.locSugerida || null,
-          origen_localidad: r.locOrigen || null, provincia: r.provincia || null, observaciones: r.observaciones || null, fotos: rutas
+          origen_localidad: r.locOrigen || null, provincia: r.provincia || null, observaciones: r.observaciones || null, fotos: rutas,
+          dip_numero: r.dip || null, telefono: r.tel || null, cobrador_tipo: r.cobradorTipo || null,
+          beneficiario_no_firma: !!r.noFirma, firmante_nombre: r.firmante || null
         };
+        for(const q of CAMPOS_Q){ if(q.id==="cobrador_tipo") continue; let v=(r.q||{})[q.id]; if(q.t==="num") v = v && v!=="No recuerda" ? parseInt(v,10) : null; fila[q.id] = v===""||v===undefined ? null : v; }
         const {error} = await sb.from("visitas").upsert(fila, {onConflict:"id"});
         if(error) throw error;
         r.uid = uid; r.sync = "enviado"; r.enviado = new Date().toISOString(); r.errorSync = ""; ok++;

@@ -751,7 +751,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <label>Hasta<input type="date" id="fHasta"></label>
     <label>Técnico<select id="fTec"><option value="">Todos</option></select></label>
     <label>Provincia<select id="fProv"><option value="">Todas</option><option>Bioko Norte</option><option>Bioko Sur</option><option>Annobón</option><option>Litoral</option><option>Centro Sur</option><option>Kié-Ntem</option><option>Wele-Nzas</option><option>Djibloho</option></select></label>
-    <label>Buscar<input id="fTxt" placeholder="Nombre o localidad"></label>
+    <label>Buscar<input id="fTxt" placeholder="Nombre, DIP o localidad"></label>
     <button class="btn sec" id="bAct">↻ Actualizar</button>
     <div class="menu" style="margin-left:auto">
       <button class="btn" id="bExp">📤 Exportar ▾</button>
@@ -778,6 +778,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div class="vacio" style="margin-top:6px">Pulse un técnico para ver su recorrido del día en el mapa.</div>
       </div>
       <div class="card"><h2>Alertas</h2><div id="lAlert"></div></div>
+      <div class="card"><h2>Satisfacción con el INSESO</h2><table><tbody id="tSat"></tbody></table>
+        <h2 style="margin-top:12px">Situación del cobro</h2><table><tbody id="tCobro"></tbody></table></div>
       <div class="card"><h2>Visitas por localidad</h2><table><tbody id="tLoc"></tbody></table></div>
       <div class="card"><h2>Últimas visitas</h2><div id="lUlt"></div></div>
     </aside>
@@ -889,7 +891,7 @@ async function cargarPosiciones(){ const {data} = await sb.from("ultima_posicion
 
 function filtradas(){
   const t=$("fTec").value, p=$("fProv").value, q=$("fTxt").value.trim().toLowerCase();
-  return visitas.filter(v => (!t||v.tecnico_id===t) && (!p||v.provincia===p) && (!q || (v.nombre||"").toLowerCase().includes(q) || (v.localidad||"").toLowerCase().includes(q)));
+  return visitas.filter(v => (!t||v.tecnico_id===t) && (!p||v.provincia===p) && (!q || (v.nombre||"").toLowerCase().includes(q) || (v.localidad||"").toLowerCase().includes(q) || (v.dip_numero||"").toLowerCase().includes(q)));
 }
 function alertasDe(v){
   const a=[];
@@ -898,6 +900,9 @@ function alertasDe(v){
   if(v.precision_m>30) a.push([`GPS ± ${v.precision_m} m`,""]);
   if(!v.localidad_confirmada) a.push(["Localidad sin confirmar",""]);
   if(duplicados.some(d=>d.visita_a===v.id||d.visita_b===v.id)) a.push(["Posible duplicado","mal"]);
+  if(v.fotos && v.dip_numero!==undefined && (!v.fotos.firmaB || !v.fotos.firmaR)) a.push(["Falta firma","mal"]);
+  if(v.cobro_regular==="No" || v.retrasos==="Sí") a.push(["Problemas de cobro",""]);
+  if(v.necesita_apoyo==="Sí") a.push(["Necesita apoyo",""]);
   return a;
 }
 
@@ -910,7 +915,14 @@ function popupVisita(v){
     Cobra: <b>${fmtXAF(v.importe_xaf)}</b>${v.cobra_tercero?`<br>Percibe: ${esc(v.cobra_tercero)}${v.parentesco?" ("+esc(v.parentesco)+")":""}`:""}<br>
     ${esc(v.localidad||"—")}${v.provincia?" · "+esc(v.provincia):""}${v.localidad_confirmada?" ✔":""}<br>
     ${fFecha(v.fecha_visita)} · ${esc(tec?tec.nombre:"—")} · GPS ± ${v.precision_m??"?"} m<br>
-    ${v.observaciones?`<i>${esc(v.observaciones)}</i><br>`:""}
+    DIP <b>${esc(v.dip_numero||"—")}</b>${v.telefono?` · ☎ ${esc(v.telefono)}`:""}<br>
+    ${v.fue_funcionario?`Funcionario: ${esc(v.fue_funcionario)}${v.empleador?" · "+esc(v.empleador):""}${v.cargo?" · "+esc(v.cargo):""}<br>`:""}
+    ${v.cobrador_tipo?`Cobra: ${esc(v.cobrador_tipo)} · regular: ${esc(v.cobro_regular||"—")}${v.retrasos==="Sí"?` · <b>retrasos</b>${v.retrasos_detalle?": "+esc(v.retrasos_detalle):""}`:""}<br>`:""}
+    ${v.satisfaccion?`Satisfacción: <b>${esc(v.satisfaccion)}</b><br>`:""}
+    ${v.quejas?`Queja/sugerencia: <i>${esc(v.quejas)}</i><br>`:""}
+    ${v.asistencia_medica?`Asistencia médica: ${esc(v.asistencia_medica)} · medicamentos: ${esc(v.medicamentos||"—")}${v.necesita_apoyo==="Sí"?` · <b>necesita apoyo</b>${v.apoyo_detalle?": "+esc(v.apoyo_detalle):""}`:""}<br>`:""}
+    ${v.observaciones?`Observaciones: <i>${esc(v.observaciones)}</i><br>`:""}
+    ${v.beneficiario_no_firma?`Firma en su nombre: ${esc(v.firmante_nombre||"—")}<br>`:""}
     ${al.map(([t,c])=>`<span class="tag ${c}">${esc(t)}</span>`).join("")}
     <div class="fotos" id="fo_${esc(v.id)}"><span class="vacio">Cargando fotos…</span></div>
     <a href="https://maps.google.com/?q=${v.lat},${v.lon}" target="_blank" rel="noopener">Abrir en Google Maps ↗</a></div>`;
@@ -920,7 +932,7 @@ async function cargarFotos(v){
   const rutas=Object.entries(v.fotos||{}); if(!rutas.length){ el.innerHTML='<span class="vacio">Sin fotos</span>'; return; }
   const {data,error} = await sb.storage.from("fotos").createSignedUrls(rutas.map(r=>r[1]), 3600);
   if(error||!data){ el.innerHTML='<span class="vacio">No se pudieron cargar las fotos</span>'; return; }
-  const nom={dipA:"DIP anverso",dipR:"DIP reverso",casa:"Casa"};
+  const nom={dipA:"DIP anverso",dipR:"DIP reverso",casa:"Casa",firmaB:"Firma beneficiario",firmaR:"Firma responsable"};
   el.innerHTML = data.map((d,i)=>d.signedUrl?`<a href="${d.signedUrl}" target="_blank" rel="noopener" title="${nom[rutas[i][0]]||rutas[i][0]}"><img src="${d.signedUrl}" alt="${nom[rutas[i][0]]||""}"></a>`:"").join("");
 }
 const marcadores = new Map();
@@ -959,6 +971,10 @@ function pintarLado(){
   const conAl=fs.map(v=>[v,alertasDe(v)]).filter(x=>x[1].length);
   $("kAlert").textContent=conAl.length;
   $("lAlert").innerHTML = conAl.length ? conAl.slice(0,60).map(([v,a])=>`<div class="item" data-id="${esc(v.id)}">${esc(v.nombre)}<small>${esc(v.localidad||"—")} · ${fFecha(v.fecha_visita)}</small>${a.map(([t,c])=>`<span class="tag ${c}">${esc(t)}</span>`).join("")}</div>`).join("") + (conAl.length>60?`<div class="vacio">… y ${conAl.length-60} más</div>`:"") : '<div class="vacio">Sin alertas en el periodo.</div>';
+  const cuenta=(campo,ops)=>{ const c={}; fs.forEach(v=>{ const k=v[campo]||"(sin respuesta)"; c[k]=(c[k]||0)+1; }); return [...ops.filter(o=>c[o]).map(o=>[o,c[o]]), ...Object.entries(c).filter(([k])=>!ops.includes(k))]; };
+  const filasPct=(arr)=>{ const tot=arr.reduce((s,x)=>s+x[1],0)||1; return arr.length ? arr.map(([k,n])=>`<tr><td>${esc(k)}</td><td style="text-align:right"><b>${n}</b> <span class="vacio">(${Math.round(n*100/tot)}%)</span></td></tr>`).join("") : '<tr><td class="vacio">Sin datos.</td></tr>'; };
+  $("tSat").innerHTML = filasPct(cuenta("satisfaccion",["Muy satisfecho","Satisfecho","Poco satisfecho","Insatisfecho"]));
+  $("tCobro").innerHTML = filasPct(cuenta("cobrador_tipo",["El propio beneficiario","Un familiar","Un representante autorizado","Otra persona"])) + `<tr><td>Con retrasos o dificultades</td><td style="text-align:right"><b>${fs.filter(v=>v.retrasos==="Sí").length}</b></td></tr>`;
   const porLoc={}; fs.forEach(v=>{ const k=(v.localidad||"(sin localidad)")+(v.provincia?" · "+v.provincia:""); porLoc[k]=(porLoc[k]||0)+1; });
   const locs=Object.entries(porLoc).sort((a,b)=>b[1]-a[1]);
   $("tLoc").innerHTML = locs.length ? locs.slice(0,25).map(([k,n])=>`<tr><td>${esc(k)}</td><td style="text-align:right"><b>${n}</b></td></tr>`).join("") : '<tr><td class="vacio">Sin visitas.</td></tr>';
@@ -1004,19 +1020,29 @@ $("bAct").onclick=cargarTodo;
 $("bExp").onclick = e => { e.stopPropagation(); $("mExp").classList.toggle("oculto"); };
 document.addEventListener("click", ()=>$("mExp").classList.add("oculto"));
 document.querySelectorAll("#mExp button").forEach(b=>b.onclick=()=>exportar(b.dataset.f));
-const CAB = ["Nº","ID visita","Nombre completo del encamado","Fecha de nacimiento","Edad","Tipo de invalidez","Descripción de la invalidez","Tiempo encamado (meses)","Importe que cobra (XAF)","Nombre completo de quien cobra por él (si procede)","Parentesco de quien cobra","Latitud puerta principal","Longitud puerta principal","Precisión GPS (m)","Localidad","Localidad confirmada","Localidad sugerida por el mapa","Provincia","Fecha de visita","Técnico","Observaciones","Alertas","Ver en mapa","Foto DIP anverso","Foto DIP reverso","Foto casa"];
+const CAB = ["Nº","ID visita","Nombre completo del encamado","Fecha de nacimiento","Edad","Tipo de invalidez","Descripción de la invalidez","Tiempo encamado (meses)","Importe que cobra (XAF)","Nombre completo de quien cobra por él (si procede)","Parentesco de quien cobra","Latitud puerta principal","Longitud puerta principal","Precisión GPS (m)","Localidad","Localidad confirmada","Localidad sugerida por el mapa","Provincia","Fecha de visita","Técnico","Observaciones","Alertas","Ver en mapa","Foto DIP anverso","Foto DIP reverso","Foto casa",
+  "Número de DIP","Teléfono",
+  "II.1 ¿Fue funcionario de la Administración Pública?","II.2 Ministerio o empresa","II.3 Cargo o función","II.4 Años de servicio","II.5 Fecha de cese o jubilación","II.6 Última vez en activo",
+  "III.1 Quién cobra la pensión","III.2 Fechas habituales de cobro","III.3 Último pago","III.4 ¿Recibe regularmente la pensión?","III.5 ¿Retrasos o dificultades?","III.5 Detalle",
+  "IV.1 Satisfacción con el INSESO","IV.2 Quejas o sugerencias",
+  "V.2 Quién le cuida","V.3 ¿Asistencia médica periódica?","V.4 ¿Dispone de medicamentos y cuidados?","V.5 ¿Necesita apoyo adicional?","V.5 Qué apoyo",
+  "Beneficiario no puede firmar","Firma en su nombre","Firma beneficiario","Firma responsable"];
+const COLS_Q=["dip_numero","telefono","fue_funcionario","empleador","cargo","anios_servicio","fecha_cese","ultima_actividad","cobrador_tipo","fechas_cobro","ultimo_pago","cobro_regular","retrasos","retrasos_detalle","satisfaccion","quejas","cuidador","asistencia_medica","medicamentos","necesita_apoyo","apoyo_detalle"];
 const nombreFich = s => (s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^\w]+/g,"_").replace(/^_|_$/g,"").slice(0,40);
-const rutaZip = (i,v,k) => `fotos/${String(i+1).padStart(4,"0")}_${nombreFich(v.nombre)}_${{dipA:"DIP_anverso",dipR:"DIP_reverso",casa:"casa"}[k]}.jpg`;
+const rutaZip = (i,v,k) => `fotos/${String(i+1).padStart(4,"0")}_${nombreFich(v.nombre)}_${{dipA:"DIP_anverso",dipR:"DIP_reverso",casa:"casa",firmaB:"firma_beneficiario",firmaR:"firma_responsable"}[k]}.jpg`;
 function filas(fs){
   return fs.map((v,i)=>{ const t=perfiles.get(v.tecnico_id);
     return [i+1, v.id, v.nombre, v.fecha_nacimiento?new Date(v.fecha_nacimiento+"T00:00:00"):"", edad(v.fecha_nacimiento,v.fecha_visita)??"", v.tipo_invalidez||"", v.descripcion_invalidez||"", v.meses_encamado??"", v.importe_xaf??"", v.cobra_tercero||"", v.parentesco||"", v.lat, v.lon, v.precision_m??"", v.localidad||"", v.localidad_confirmada?"Sí":"No", v.localidad_sugerida||"", v.provincia||"", new Date(v.fecha_visita), t?t.nombre:"", v.observaciones||"", alertasDe(v).map(a=>a[0]).join("; "), `https://maps.google.com/?q=${v.lat},${v.lon}`,
-      ...["dipA","dipR","casa"].map(k=>v.fotos&&v.fotos[k]?rutaZip(i,v,k):"")]; });
+      ...["dipA","dipR","casa"].map(k=>v.fotos&&v.fotos[k]?rutaZip(i,v,k):""),
+      ...COLS_Q.map(c=>v[c]??""), v.beneficiario_no_firma?"Sí":"No", v.firmante_nombre||"",
+      ...["firmaB","firmaR"].map(k=>v.fotos&&v.fotos[k]?rutaZip(i,v,k):"")]; });
 }
 function libroExcel(fs){
   const ws=XLSX.utils.aoa_to_sheet([CAB, ...filas(fs)], {cellDates:true});
   fs.forEach((v,i)=>{ const r=i+2; if(ws["D"+r]&&v.fecha_nacimiento) ws["D"+r].z="dd/mm/yyyy"; if(ws["I"+r]&&v.importe_xaf!=null) ws["I"+r].z='#,##0 "XAF"'; ["L","M"].forEach(c=>{ if(ws[c+r]) ws[c+r].z="0.000000"; }); if(ws["S"+r]) ws["S"+r].z="dd/mm/yyyy hh:mm"; if(ws["W"+r]) ws["W"+r].l={Target:ws["W"+r].v}; });
   ws["!cols"]=[5,14,30,12,6,26,30,10,14,30,14,11,11,8,24,10,24,13,16,24,30,30,36,40,40,36].map(w=>({wch:w}));
-  ws["!autofilter"]={ref:"A1:Z"+(fs.length+1)};
+  ws["!cols"]=ws["!cols"].concat(Array(CAB.length-ws["!cols"].length).fill({wch:22}));
+  ws["!autofilter"]={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:fs.length,c:CAB.length-1}})};
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Visitas");
   const res={}; fs.forEach(v=>{ const t=perfiles.get(v.tecnico_id), k=t?t.nombre:"—"; res[k]=res[k]||{n:0,imp:0}; res[k].n++; res[k].imp+=v.importe_xaf||0; });
   const ws2=XLSX.utils.aoa_to_sheet([["Técnico","Visitas","Importe total verificado (XAF)"], ...Object.entries(res).map(([k,o])=>[k,o.n,o.imp])]); ws2["!cols"]=[{wch:30},{wch:10},{wch:26}];
