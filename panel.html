@@ -997,7 +997,10 @@ function alertasDe(v){
   if(!v.fotos || !v.fotos.casa) a.push(["Sin foto de la casa","mal"]);
   if(v.precision_m>30) a.push([`GPS ± ${v.precision_m} m`,""]);
   if(!v.localidad_confirmada) a.push(["Localidad sin confirmar",""]);
-  if(duplicados.some(d=>d.visita_a===v.id||d.visita_b===v.id)) a.push(["Posible duplicado","mal"]);
+  for(const d of duplicados.filter(d=>d.visita_a===v.id||d.visita_b===v.id)){
+    const otro = d.visita_a===v.id ? d.nombre_b : d.nombre_a;
+    a.push([`Posible duplicado: ${d.motivo||"coincidencia"} que «${otro}»`,"mal"]);
+  }
   if(v.fotos && v.dip_numero!==undefined && (!v.fotos.firmaB || !v.fotos.firmaR)) a.push(["Falta firma","mal"]);
   if(v.cobro_regular==="No" || v.retrasos==="Sí") a.push(["Problemas de cobro",""]);
   if(v.necesita_apoyo==="Sí") a.push(["Necesita apoyo",""]);
