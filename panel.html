@@ -689,7 +689,19 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .menu .lista button{display:block;width:100%;text-align:left;border:0;background:none;padding:10px 12px;font-size:14px;cursor:pointer;font-family:inherit}
   .menu .lista button:hover{background:var(--verde2)}
   .menu .lista small{display:block;color:var(--gris);font-size:12px}
-  #cuerpo{display:flex;height:calc(100% - 110px);min-height:500px}
+  #pestanas{display:flex;gap:4px;padding:0 16px;background:#fff;border-bottom:1px solid var(--borde)}
+  #pestanas button{border:0;background:none;padding:10px 14px;font-size:14px;font-weight:600;color:var(--gris);border-bottom:3px solid transparent;cursor:pointer;font-family:inherit}
+  #pestanas button.on{color:var(--verde);border-color:var(--verde)}
+  #cuerpo{display:flex;height:calc(100% - 152px);min-height:500px}
+  #vReg{padding:12px 16px;overflow:auto;height:calc(100% - 152px)}
+  #tablaReg{background:#fff;border:1px solid var(--borde);border-radius:10px;overflow:hidden}
+  #tablaReg th{position:sticky;top:0;background:#eef3f0;cursor:pointer;white-space:nowrap;user-select:none;padding:8px 6px}
+  #tablaReg th:hover{color:var(--verde)}
+  #tablaReg td{padding:8px 6px}
+  #tablaReg tbody tr{cursor:pointer}
+  #tablaReg tbody tr:hover td{background:var(--verde2)}
+  #tablaReg tbody tr:nth-child(even) td{background:#fafcfb}
+  #tablaReg tbody tr:nth-child(even):hover td{background:var(--verde2)}
   #mapa{flex:1;min-width:0}
   #lado{width:400px;max-width:45vw;overflow:auto;border-left:1px solid var(--borde);background:var(--fondo);padding:12px}
   .kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
@@ -815,6 +827,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <button data-f="pos">Posiciones de los técnicos (CSV)<small>Recorridos en el periodo</small></button>
       </div>
     </div>
+  </div>
+  <div id="pestanas"><button class="on" data-v="mapa">🗺 Mapa y seguimiento</button><button data-v="reg">📋 Registros (<span id="nReg">0</span>)</button></div>
+  <div id="vReg" class="oculto">
+    <div class="vacio" style="margin-bottom:8px">Pulse un registro para ver su ficha completa. Pulse el título de una columna para ordenar. Se aplican los filtros de arriba.</div>
+    <div id="tablaReg"><table><thead><tr id="cabReg"></tr></thead><tbody id="cuerpoReg"></tbody></table></div>
   </div>
   <div id="cuerpo">
     <div id="mapa"></div>
@@ -987,7 +1004,37 @@ function alertasDe(v){
 }
 
 /* ---------- Pintar ---------- */
-function pintar(){ pintarVisitasMapa(); pintarTecnicos(); pintarLado(); }
+function pintar(){ pintarVisitasMapa(); pintarTecnicos(); pintarLado(); pintarRegistros(); }
+/* ---------- Pestaña Registros ---------- */
+const COLS_REG = [
+  ["fecha_visita","Fecha", v=>fFecha(v.fecha_visita)],
+  ["nombre","Beneficiario", v=>`<b>${esc(v.nombre)}</b>`],
+  ["dip_numero","DIP", v=>esc(v.dip_numero||"")],
+  ["localidad","Localidad", v=>esc(v.localidad||"")],
+  ["provincia","Provincia", v=>esc(v.provincia||"")],
+  ["importe_xaf","Importe", v=>`<span style="white-space:nowrap">${fmtXAF(v.importe_xaf)}</span>`],
+  ["tecnico","Técnico", v=>esc((perfiles.get(v.tecnico_id)||{}).nombre||"")],
+  ["satisfaccion","Satisfacción", v=>esc(v.satisfaccion||"")],
+  ["alertas","Alertas", v=>alertasDe(v).map(([a,c])=>`<span class="tag ${c}">${esc(a)}</span>`).join("")]
+];
+let ordenReg = {col:"fecha_visita", asc:false};
+function valorOrden(v,c){ if(c==="tecnico") return (perfiles.get(v.tecnico_id)||{}).nombre||""; if(c==="alertas") return alertasDe(v).length; const x=v[c]; return x==null?"":x; }
+function pintarRegistros(){
+  const fs = filtradas().slice().sort((a,b)=>{ const x=valorOrden(a,ordenReg.col), y=valorOrden(b,ordenReg.col); const r = typeof x==="number"&&typeof y==="number" ? x-y : String(x).localeCompare(String(y),"es",{numeric:true}); return ordenReg.asc ? r : -r; });
+  $("nReg").textContent = fs.length;
+  $("cabReg").innerHTML = "<th>Nº</th>" + COLS_REG.map(([c,t])=>`<th data-c="${c}">${t}${ordenReg.col===c?(ordenReg.asc?" ▲":" ▼"):""}</th>`).join("");
+  document.querySelectorAll("#cabReg th[data-c]").forEach(th=>th.onclick=()=>{ const c=th.dataset.c; ordenReg = {col:c, asc: ordenReg.col===c ? !ordenReg.asc : c!=="fecha_visita" && c!=="importe_xaf" && c!=="alertas"}; pintarRegistros(); });
+  const max = 1000;
+  $("cuerpoReg").innerHTML = fs.length ? fs.slice(0,max).map((v,i)=>`<tr data-id="${esc(v.id)}"><td>${i+1}</td>${COLS_REG.map(([,,f])=>`<td>${f(v)}</td>`).join("")}</tr>`).join("") + (fs.length>max?`<tr><td colspan="${COLS_REG.length+1}" class="vacio">Se muestran los ${max} primeros de ${fs.length}. Use los filtros o la exportación.</td></tr>`:"")
+    : `<tr><td colspan="${COLS_REG.length+1}" class="vacio" style="padding:20px">No hay registros con los filtros actuales. Compruebe las fechas «Desde / Hasta».</td></tr>`;
+  document.querySelectorAll("#cuerpoReg tr[data-id]").forEach(tr=>tr.onclick=()=>verFicha(tr.dataset.id));
+}
+document.querySelectorAll("#pestanas button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("#pestanas button").forEach(x=>x.classList.toggle("on", x===b));
+  const reg = b.dataset.v==="reg";
+  $("vReg").classList.toggle("oculto", !reg); $("cuerpo").classList.toggle("oculto", reg);
+  if(!reg && mapa) setTimeout(()=>mapa.invalidateSize(), 50);
+});
 function popupVisita(v){
   const tec=perfiles.get(v.tecnico_id), ed=edad(v.fecha_nacimiento, v.fecha_visita), al=alertasDe(v);
   return `<div class="pop"><b class="t">${esc(v.nombre)}</b>

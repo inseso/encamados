@@ -91,6 +91,23 @@
   #resultado p{font-size:15px;line-height:1.45;margin:8px 0}
   #resultado .resIco{font-size:46px}
   #resultado .vacio{font-size:12px;color:var(--gris)}
+  .reg.clic{cursor:pointer;border-radius:8px;padding:10px 8px;margin:0 -8px}
+  .reg.clic:active,.reg.clic:hover{background:var(--verde2)}
+  #detalle{position:fixed;inset:0;background:rgba(15,25,20,.6);z-index:25;overflow:auto;padding:12px}
+  #detalle.oculto{display:none}
+  #detalle .caja{background:#fff;border-radius:14px;max-width:640px;margin:0 auto;padding:16px}
+  .detCab{border-bottom:3px solid var(--verde);padding-bottom:8px;margin-bottom:6px}
+  .detCab b{font-size:18px;color:var(--verde);display:block;margin-bottom:4px}
+  #detalle h3{font-size:13px;color:#fff;background:var(--verde);padding:5px 8px;border-radius:5px;margin:14px 0 4px}
+  table.det{width:100%;border-collapse:collapse;font-size:14px}
+  table.det td{border-bottom:1px solid #eef1ef;padding:6px 4px;vertical-align:top}
+  table.det td:first-child{color:var(--gris);width:42%}
+  .detFotos{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .detFotos figure{margin:0;border:1px solid var(--borde);border-radius:8px;padding:5px}
+  .detFotos img{width:100%;height:130px;object-fit:contain;background:#fafafa;border-radius:5px}
+  .detFotos figcaption{font-size:12px;color:var(--gris);text-align:center}
+  .detBot{position:sticky;bottom:-16px;background:#fff;padding:12px 0 4px;display:flex;gap:8px;flex-wrap:wrap}
+  .detBot .btn{width:auto;flex:1;margin-top:0}
   #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1b1f1d;color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .3s;pointer-events:none;max-width:90%}
   #toast.ver{opacity:1}
 </style>
@@ -258,7 +275,14 @@
   </div>
   <div class="card">
     <h2>Registros guardados en este teléfono</h2>
+    <p style="margin:0 0 6px;font-size:13px;color:var(--gris)">Pulse un registro para ver toda su información.</p>
     <div id="lista"></div>
+  </div>
+  <div class="card">
+    <h2>Mis registros en la base de datos (<span id="nSrv">0</span>)</h2>
+    <p style="margin:0 0 6px;font-size:13px;color:var(--gris)">Todo lo que usted ha enviado, aunque ya no esté en este teléfono. Solo consulta.</p>
+    <button class="btn sec peq" id="bRecargarSrv" type="button">↻ Actualizar</button>
+    <div id="listaSrv"></div>
   </div>
   <div class="card">
     <h2>Liberar espacio</h2>
@@ -284,6 +308,7 @@
     <button class="btn sec" id="cNo">No acepto</button>
   </div>
 </div>
+<div id="detalle" class="oculto" role="dialog" aria-modal="true"><div class="caja"><div id="detCont"></div><div id="detBotones" class="detBot"></div></div></div>
 <div id="resultado" class="oculto" role="dialog" aria-modal="true"><div class="caja" id="resCaja"></div></div>
 <div id="toast"></div>
 
@@ -335,7 +360,7 @@ function verTab(t){
   $("vLista").classList.toggle("oculto", t!=="lista");
   $("tabNuevo").classList.toggle("on", t==="nuevo");
   $("tabLista").classList.toggle("on", t==="lista");
-  if(t==="lista") pintarLista();
+  if(t==="lista"){ pintarLista(); cargarServidor(); }
   scrollTo(0,0);
 }
 
@@ -731,7 +756,7 @@ function pintarLista(){
   pintarCuenta(); pintarSync();
   if(!registros.length){ $("lista").innerHTML = '<p style="color:var(--gris);margin:0">Aún no hay registros.</p>'; return; }
   $("lista").innerHTML = registros.map((r,i)=>`
-    <div class="reg">
+    <div class="reg clic" data-ver="${r.id}">
       <b>${i+1}. ${esc(r.nombre)}${r.sync==="enviado"?'<span class="tag ok">☁ enviado</span>':r.sync==="error"?'<span class="tag mal" title="'+esc(r.errorSync||"")+'">⚠ error de envío</span>':'<span class="tag">⏳ pendiente</span>'}${r.locOrigen==="pendiente"&&!r.localidad?'<span class="tag">localidad pendiente</span>':''}${r.precision>PREC_OBJ?'<span class="tag">± '+r.precision+' m</span>':''}</b>
       ${r.sync==="error"&&r.errorSync?`<small style="color:var(--rojo)">⚠ ${esc(r.errorSync)}</small>`:""}
       <small>DIP ${esc(r.dip||"—")}${r.tel?" · ☎ "+esc(r.tel):""}</small>
@@ -741,11 +766,85 @@ function pintarLista(){
       <small>${esc(r.localidad||"—")}${r.provincia?" · "+esc(r.provincia):""}</small>
       ${r.cobra?`<small>Percibe en su nombre: ${esc(r.cobra)}${r.parentesco?" ("+esc(r.parentesco)+")":""}</small>`:""}
       <small>${r.lat}, ${r.lon} · ${new Date(r.fecha).toLocaleString("es-ES",{dateStyle:"short",timeStyle:"short"})}</small>
+      <button class="btn peq" onclick="verDetalle('${r.id}')">👁 Ver detalle</button>
       <button class="btn sec peq" onclick="editar('${r.id}')">Editar</button>
       <a class="btn sec peq" style="text-decoration:none" href="${urlMapa(r.lat,r.lon)}" target="_blank" rel="noopener">Mapa ↗</a>
       <button class="btn sec peq" style="color:var(--rojo);border-color:var(--rojo)" onclick="borrar('${r.id}',this)">Borrar</button>
     </div>`).join("");
+  activarClicLista();
 }
+function activarClicLista(){
+  document.querySelectorAll("#lista .reg.clic, #listaSrv .reg.clic").forEach(el=>el.onclick=e=>{ if(e.target.closest("button,a")) return; el.dataset.srv ? verDetalleSrv(el.dataset.srv) : verDetalle(el.dataset.ver); });
+}
+/* Registros que ya están en el servidor (consulta) */
+let delServidor = [];
+async function cargarServidor(){
+  const el = $("listaSrv"); if(!el) return;
+  if(!sesion || !navigator.onLine){ el.innerHTML = '<p class="vacio" style="margin:0">Sin conexión: no se puede consultar el servidor ahora.</p>'; return; }
+  el.innerHTML = '<p class="vacio" style="margin:0">Consultando la base de datos…</p>';
+  const {data, error} = await sb.from("visitas").select("*").eq("tecnico_id", sesion.user.id).order("fecha_visita", {ascending:false}).limit(500);
+  if(error){ el.innerHTML = `<p class="err" style="margin:0">No se pudo consultar: ${esc(explicarError(error))}</p>`; return; }
+  delServidor = data || [];
+  $("nSrv").textContent = delServidor.length;
+  el.innerHTML = delServidor.length ? delServidor.map((v,i)=>`
+    <div class="reg clic" data-srv="${esc(v.id)}">
+      <b>${i+1}. ${esc(v.nombre)}<span class="tag ok">☁ en la base de datos</span></b>
+      <small>DIP ${esc(v.dip_numero||"—")} · ${esc(v.localidad||"—")}${v.provincia?" · "+esc(v.provincia):""}</small>
+      <small>${new Date(v.fecha_visita).toLocaleString("es-ES",{dateStyle:"short",timeStyle:"short"})} · ${v.importe_xaf!=null?fmtXAF(v.importe_xaf)+" XAF":""}</small>
+      <button class="btn peq" onclick="verDetalleSrv('${esc(v.id)}')">👁 Ver detalle</button>
+    </div>`).join("") : '<p class="vacio" style="margin:0">Todavía no hay registros suyos en la base de datos.</p>';
+  activarClicLista();
+}
+/* Detalle de un registro */
+const TXT_FOTO = {dipA:"DIP – anverso", dipR:"DIP – reverso", carnet:"Carnet del asegurado", casa:"Vivienda", firmaB:"Firma del beneficiario", firmaR:"Firma del responsable"};
+function htmlDetalle(v, estado){
+  const f = (k, x) => `<tr><td>${esc(k)}</td><td>${x===null||x===undefined||x===""?'<span class="vacio">—</span>':x}</td></tr>`;
+  const e = x => esc(x ?? ""), sec = (t, filas) => `<h3>${t}</h3><table class="det">${filas.join("")}</table>`;
+  const ed = edadA(v.fecha_nacimiento, v.fecha_visita);
+  return `<div class="detCab"><b>${e(v.nombre)}</b><div>${estado}</div></div>` +
+    sec("Ubicación", [f("Coordenadas", `${v.lat}, ${v.lon} (± ${v.precision_m??"?"} m) · <a href="${urlMapa(v.lat,v.lon)}" target="_blank" rel="noopener">Mapa ↗</a>`), f("Localidad", e(v.localidad)+(v.localidad_confirmada?" ✔":"")), f("Provincia", e(v.provincia))]) +
+    sec("I. Datos del beneficiario", [f("Número de DIP", e(v.dip_numero)), f("Teléfono", e(v.telefono)), f("Fecha de nacimiento", v.fecha_nacimiento?`${new Date(v.fecha_nacimiento+"T00:00:00").toLocaleDateString("es-ES")} (${ed} años)`:""), f("Tipo de invalidez", e(v.tipo_invalidez)+(v.descripcion_invalidez?" – "+e(v.descripcion_invalidez):"")), f("Importe de la pensión", v.importe_xaf!=null?`<b>${fmtXAF(v.importe_xaf)} XAF</b>`:"")]) +
+    sec("II. Historial laboral", [f("¿Fue funcionario?", e(v.fue_funcionario)), f("Ministerio o empresa", e(v.empleador)), f("Cargo o función", e(v.cargo)), f("Años de servicio", v.anios_servicio??""), f("Jubilado / cobra la pensión desde", e(v.fecha_cese)), f("Última vez en activo", e(v.ultima_actividad))]) +
+    sec("III. Cobro de la pensión", [f("Quién cobra", e(v.cobrador_tipo)+(v.cobra_tercero?": "+e(v.cobra_tercero)+(v.parentesco?" ("+e(v.parentesco)+")":""):"")), f("Fechas de cobro", e(v.fechas_cobro)), f("Último pago", e(v.ultimo_pago)), f("¿Cobra regularmente?", e(v.cobro_regular)), f("¿Retrasos o dificultades?", e(v.retrasos)+(v.retrasos_detalle?" – "+e(v.retrasos_detalle):""))]) +
+    sec("IV. Valoración", [f("Satisfacción", e(v.satisfaccion)), f("Quejas o sugerencias", e(v.quejas))]) +
+    sec("V. Situación socioasistencial", [f("Tiempo encamado", v.meses_encamado!=null?v.meses_encamado+" meses":""), f("Quién le cuida", e(v.cuidador)), f("Asistencia médica", e(v.asistencia_medica)), f("Medicamentos y cuidados", e(v.medicamentos)), f("Necesita apoyo", e(v.necesita_apoyo)+(v.apoyo_detalle?" – "+e(v.apoyo_detalle):""))]) +
+    sec("VI. Observaciones", [f("Observaciones", e(v.observaciones))]) +
+    sec("VII. Visita y validación", [f("Fecha de la visita", new Date(v.fecha_visita).toLocaleString("es-ES")), f("Firma del beneficiario", v.beneficiario_no_firma?"Firma en su nombre: "+e(v.firmante_nombre):"Firmada por el beneficiario")]) +
+    `<h3>Fotografías y firmas</h3><div class="detFotos" id="detFotos"><span class="vacio">Cargando…</span></div>`;
+}
+function abrirDetalle(html, botones){
+  $("detCont").innerHTML = html;
+  $("detBotones").innerHTML = botones.map((b,i)=>`<button class="btn ${b.sec?"sec":""}" data-i="${i}">${b.t}</button>`).join("");
+  $("detBotones").querySelectorAll("button").forEach(el=>el.onclick=()=>botones[+el.dataset.i].f());
+  $("detalle").classList.remove("oculto"); $("detalle").scrollTop = 0;
+}
+function cerrarDetalle(){ $("detalle").classList.add("oculto"); document.querySelectorAll("#detFotos img").forEach(i=>{ if(i.src.startsWith("blob:")) URL.revokeObjectURL(i.src); }); }
+function pintarFotosDet(lista){
+  $("detFotos").innerHTML = lista.length ? lista.map(([k,u])=>`<figure><a href="${u}" target="_blank" rel="noopener"><img src="${u}" alt="${TXT_FOTO[k]||k}"></a><figcaption>${TXT_FOTO[k]||k}</figcaption></figure>`).join("") : '<span class="vacio">Sin fotografías.</span>';
+}
+async function verDetalle(id){
+  const r = registros.find(x=>x.id===id); if(!r) return;
+  const est = r.sync==="enviado" ? '<span class="tag ok">☁ en la base de datos</span>' : r.sync==="error" ? `<span class="tag mal">⚠ no enviado</span><div class="err" style="font-size:13px;margin-top:4px">${esc(r.errorSync||"")}</div>` : '<span class="tag">⏳ pendiente de envío</span>';
+  abrirDetalle(htmlDetalle(filaDe(r, {}), est), [
+    {t:"✏️ Editar", f:()=>{ cerrarDetalle(); editar(id); }},
+    ...(r.sync!=="enviado" ? [{t:"☁ Enviar ahora", f:()=>{ cerrarDetalle(); enviarAhora(r); }}] : []),
+    {t:"Cerrar", sec:true, f:cerrarDetalle}]);
+  const lista = [];
+  for(const k of Object.keys(FOTOS)){ if(!(r.fotos&&r.fotos[k])) continue; try{ const b = await fotoGet(r.id+"_"+k); if(b) lista.push([k, URL.createObjectURL(b)]); }catch(e){} }
+  pintarFotosDet(lista);
+}
+async function verDetalleSrv(id){
+  const v = delServidor.find(x=>x.id===id); if(!v) return;
+  abrirDetalle(htmlDetalle(v, '<span class="tag ok">☁ en la base de datos</span>'), [{t:"Cerrar", sec:true, f:cerrarDetalle}]);
+  const ks = Object.keys(v.fotos||{});
+  if(!ks.length){ pintarFotosDet([]); return; }
+  try{
+    const {data, error} = await sb.storage.from("fotos").createSignedUrls(ks.map(k=>v.fotos[k]), 3600);
+    if(error || !Array.isArray(data)) throw error || new Error("respuesta no válida");
+    pintarFotosDet(data.map((d,i)=>[ks[i], d.signedUrl]).filter(x=>x[1]));
+  }catch(e){ $("detFotos").innerHTML = '<span class="err">No se pudieron cargar las fotos desde el servidor. Inténtelo más tarde.</span>'; }
+}
+window.verDetalle = verDetalle; window.verDetalleSrv = verDetalleSrv;
 async function editar(id){
   const r = registros.find(x=>x.id===id); if(!r) return;
   limpiar(); editando = id; verTab("nuevo");
@@ -933,6 +1032,12 @@ async function enviarUno(r, uid){
           if(error) throw error;
           rutas[k] = ruta;
         }
+        const fila = filaDe(r, rutas);
+        const {error} = await sb.from("visitas").upsert(fila, {onConflict:"id"});
+        if(error) throw error;
+        r.uid = uid; r.sync = "enviado"; r.enviado = new Date().toISOString(); r.errorSync = "";
+}
+function filaDe(r, rutas){
         const fila = {
           id: r.id, fecha_visita: r.fecha, nombre: r.nombre,
           fecha_nacimiento: r.fechaNac || null, tipo_invalidez: r.tipoInv || null, descripcion_invalidez: r.descInv || null,
@@ -945,9 +1050,7 @@ async function enviarUno(r, uid){
           beneficiario_no_firma: !!r.noFirma, firmante_nombre: r.firmante || null
         };
         for(const q of CAMPOS_Q){ if(q.id==="cobrador_tipo") continue; let v=(r.q||{})[q.id]; if(q.t==="num") v = v && v!=="No recuerda" ? parseInt(v,10) : null; fila[q.id] = v===""||v===undefined ? null : v; }
-        const {error} = await sb.from("visitas").upsert(fila, {onConflict:"id"});
-        if(error) throw error;
-        r.uid = uid; r.sync = "enviado"; r.enviado = new Date().toISOString(); r.errorSync = "";
+        return fila;
 }
 /* Envío inmediato al guardar, con ventana de resultado */
 function ventana(html, botones){
@@ -976,6 +1079,7 @@ $("bSync").onclick = () => { if(!navigator.onLine){ toast("Sin conexión"); retu
 addEventListener("online", () => sincronizar());
 setInterval(sincronizar, 60000);
 
+$("bRecargarSrv").onclick = () => cargarServidor();
 $("bLiberar").onclick = async function(){
   const env = misRegistros().filter(r => r.sync === "enviado");
   if(!env.length){ toast("No hay registros enviados que borrar"); return; }
