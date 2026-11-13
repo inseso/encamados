@@ -710,6 +710,7 @@ function pintarLista(){
   $("lista").innerHTML = registros.map((r,i)=>`
     <div class="reg">
       <b>${i+1}. ${esc(r.nombre)}${r.sync==="enviado"?'<span class="tag ok">☁ enviado</span>':r.sync==="error"?'<span class="tag mal" title="'+esc(r.errorSync||"")+'">⚠ error de envío</span>':'<span class="tag">⏳ pendiente</span>'}${r.locOrigen==="pendiente"&&!r.localidad?'<span class="tag">localidad pendiente</span>':''}${r.precision>PREC_OBJ?'<span class="tag">± '+r.precision+' m</span>':''}</b>
+      ${r.sync==="error"&&r.errorSync?`<small style="color:var(--rojo)">⚠ ${esc(r.errorSync)}</small>`:""}
       <small>DIP ${esc(r.dip||"—")}${r.tel?" · ☎ "+esc(r.tel):""}</small>
       <small>${r.fechaNac?edadA(r.fechaNac,r.fecha)+" años · ":""}${esc(r.tipoInv||"")}${r.tiempoTexto?" · encamado "+esc(r.tiempoTexto):""}</small>
       <small>Fotos: DIP ${r.fotos&&r.fotos.dipA?"✔":"✘"}${r.fotos&&r.fotos.dipR?" (+reverso)":""} · Casa ${r.fotos&&r.fotos.casa?"✔":"✘"}</small>
@@ -868,6 +869,15 @@ function pintarSync(){
   else if(!pend) estado(el, `☁ Los ${m.length} registros de este teléfono están en el servidor.`);
   else estado(el, `⏳ ${pend} registro(s) pendientes de envío${err ? ` (${err} con error; se reintentará)` : ""}.` + (navigator.onLine ? "" : " Sin conexión: se enviarán al recuperarla."), err ? "mal" : "aviso");
 }
+function explicarError(e){
+  const m = String((e && (e.message || e.error || e.msg)) || e);
+  if(/column|schema cache|does not exist/i.test(m)) return "El servidor no está actualizado: falta ejecutar en Supabase el script 02_cuestionario_encamados.sql. Avise al supervisor. ("+m+")";
+  if(/row-level security|violates|permission denied|42501/i.test(m)) return "El servidor no acepta datos de su usuario (perfil inexistente o desactivado). Avise al supervisor. ("+m+")";
+  if(/jwt|token|expired|401/i.test(m)) return "Su sesión ha caducado: pulse «Salir» y vuelva a entrar. ("+m+")";
+  if(/bucket/i.test(m)) return "Falta el almacén de fotos en Supabase (script 01). Avise al supervisor. ("+m+")";
+  if(/failed to fetch|network|load failed/i.test(m)) return "Sin conexión con el servidor; se reintentará.";
+  return m;
+}
 async function sincronizar(){
   if(sincronizando || !navigator.onLine || !sesion) return;
   sincronizando = true; let ok = 0;
@@ -899,7 +909,7 @@ async function sincronizar(){
         const {error} = await sb.from("visitas").upsert(fila, {onConflict:"id"});
         if(error) throw error;
         r.uid = uid; r.sync = "enviado"; r.enviado = new Date().toISOString(); r.errorSync = ""; ok++;
-      }catch(e){ r.sync = "error"; r.errorSync = String((e && e.message) || e); }
+      }catch(e){ r.sync = "error"; r.errorSync = explicarError(e); }
       persistir();
     }
   } finally {
