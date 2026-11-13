@@ -871,6 +871,24 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .grupo{background:rgba(31,111,67,.85);color:#fff;border:3px solid rgba(255,255,255,.9);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 1px 6px rgba(0,0,0,.35)}
   #mapa:fullscreen{width:100%;height:100%}
   @media (max-width:800px){ #cuerpo{flex-direction:column;height:auto} #mapa{height:60vh} #lado{width:auto;max-width:none;border-left:0} }
+
+  .btn.peligro{background:var(--rojo);border-color:var(--rojo);color:#fff}
+  .modal2{position:fixed;inset:0;background:rgba(15,25,20,.55);z-index:3600;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:30px 12px}
+  .modal2.oculto{display:none!important}
+  .modal2 .caja{background:#fff;border-radius:12px;max-width:860px;width:100%;padding:18px 20px}
+  .modal2 h2{margin:0 0 10px;color:var(--verde);font-size:17px}
+  .modal2 h3{margin:16px 0 8px;font-size:14px;color:var(--verde)}
+  .modal2 input,.modal2 select,.modal2 textarea{width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--borde);border-radius:7px;font-size:14px;font-family:inherit}
+  .modal2 textarea{min-height:60px}
+  .modal2 input[type=checkbox]{width:auto}
+  .edRej{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px 14px}
+  .edRej label{font-size:13px;color:var(--gris);display:flex;flex-direction:column;gap:4px}
+  .edRej label.cambiado input,.edRej label.cambiado select,.edRej label.cambiado textarea{border-color:var(--ambar);background:#fff8e6}
+  .barraReg{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .barraReg .btn{width:auto;margin:0;white-space:nowrap}
+  #cuerpoReg td.sel,#cabReg th.sel{width:28px;text-align:center}
+  .delFila{padding:6px 0;border-bottom:1px solid var(--borde);font-size:14px}
+  @media print{#bCorregir,#bEliminar{display:none}}
 </style>
 </head>
 <body>
@@ -916,7 +934,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   </div>
   <div id="pestanas"><button class="on" data-v="mapa">🗺 Mapa y seguimiento</button><button data-v="coord">📍 Mapa de coordenadas</button><button data-v="reg">📋 Registros (<span id="nReg">0</span>)</button></div>
   <div id="vReg" class="oculto">
-    <div class="vacio" style="margin-bottom:8px">Pulse un registro para ver su ficha completa. Pulse el título de una columna para ordenar. Se aplican los filtros de arriba.</div>
+    <div class="barraReg"><div class="vacio">Pulse un registro para ver su ficha completa, corregirla o eliminarla. Marque las casillas para eliminar varios registros de prueba a la vez. Pulse el título de una columna para ordenar. Se aplican los filtros de arriba.</div><button class="btn peligro peq" id="bEliminarSel" disabled>🗑 Eliminar seleccionados (<span id="nSel">0</span>)</button></div>
     <div id="tablaReg"><table><thead><tr id="cabReg"></tr></thead><tbody id="cuerpoReg"></tbody></table></div>
   </div>
   <div id="cuerpo">
@@ -943,7 +961,35 @@ svg.leaflet-image-layer.leaflet-interactive path {
   </div>
 </div>
 <div id="progreso" class="oculto"></div>
-<div id="doc" class="oculto"><div class="barra"><button class="btn" id="bImprimir">🖨 Imprimir / Guardar PDF</button><button class="btn sec" id="bCerrarDoc">✕ Cerrar</button></div><div class="hoja" id="docCont"></div></div>
+<div id="doc" class="oculto"><div class="barra"><button class="btn" id="bImprimir">🖨 Imprimir / Guardar PDF</button><button class="btn sec" id="bCorregir">✏ Corregir datos</button><button class="btn peligro" id="bEliminar">🗑 Eliminar registro</button><button class="btn sec" id="bCerrarDoc">✕ Cerrar</button></div><div class="hoja" id="docCont"></div></div>
+
+<div id="modalEd" class="modal2 oculto" role="dialog" aria-modal="true">
+  <div class="caja">
+    <div style="display:flex;align-items:center"><h2>Corregir los datos del registro</h2><button class="btn sec peq" id="bCerrarEd" style="margin-left:auto">✕ Cerrar</button></div>
+    <div class="vacio">Corrija solo lo que esté mal. La fecha de la visita, el técnico y las fotos no se modifican. Cada corrección queda registrada con su motivo, quién la hizo y los valores anteriores.</div>
+    <form id="fEd" autocomplete="off"><div id="edCampos"></div>
+      <h3>Motivo de la corrección *</h3>
+      <textarea id="edMotivo" required minlength="5" placeholder="Ej.: el DIP estaba mal transcrito; comprobado con la foto del documento"></textarea>
+      <button class="btn" id="bGuardarEd" style="margin-top:12px">Guardar la corrección</button>
+      <div id="edMsg" class="msg oculto"></div>
+    </form>
+  </div>
+</div>
+<div id="modalDel" class="modal2 oculto" role="dialog" aria-modal="true">
+  <div class="caja" style="max-width:640px">
+    <div style="display:flex;align-items:center"><h2 style="color:var(--rojo)">Eliminar registros</h2><button class="btn sec peq" id="bCerrarDel" style="margin-left:auto">✕ Cerrar</button></div>
+    <div id="delLista"></div>
+    <div class="vacio" style="margin-top:8px">Se borran el registro y sus fotos y firmas. Queda una copia de los datos en el archivo de eliminados (con el motivo, quién y cuándo), y el registro no vuelve aunque el teléfono del técnico lo envíe de nuevo.</div>
+    <form id="fDel" autocomplete="off">
+      <h3>Motivo *</h3>
+      <input id="delMotivo" required minlength="5" placeholder="Ej.: registro de prueba">
+      <h3>Escriba ELIMINAR para confirmar *</h3>
+      <input id="delConf" required autocomplete="off">
+      <button class="btn peligro" id="bConfDel" style="margin-top:12px">Eliminar definitivamente</button>
+      <div id="delMsg" class="msg oculto"></div>
+    </form>
+  </div>
+</div>
 <div id="modal" class="oculto" role="dialog" aria-modal="true">
   <div class="caja">
     <div style="display:flex;align-items:center"><h2>Gestión de usuarios</h2><button class="btn sec peq" id="bCerrarM" style="margin-left:auto">✕ Cerrar</button></div>
@@ -1124,12 +1170,18 @@ function valorOrden(v,c){ if(c==="tecnico") return (perfiles.get(v.tecnico_id)||
 function pintarRegistros(){
   const fs = filtradas().slice().sort((a,b)=>{ const x=valorOrden(a,ordenReg.col), y=valorOrden(b,ordenReg.col); const r = typeof x==="number"&&typeof y==="number" ? x-y : String(x).localeCompare(String(y),"es",{numeric:true}); return ordenReg.asc ? r : -r; });
   $("nReg").textContent = fs.length;
-  $("cabReg").innerHTML = "<th>Nº</th>" + COLS_REG.map(([c,t])=>`<th data-c="${c}">${t}${ordenReg.col===c?(ordenReg.asc?" ▲":" ▼"):""}</th>`).join("");
+  $("cabReg").innerHTML = `<th class="sel"><input type="checkbox" id="selTodos" title="Seleccionar los registros mostrados"></th><th>Nº</th>` + COLS_REG.map(([c,t])=>`<th data-c="${c}">${t}${ordenReg.col===c?(ordenReg.asc?" ▲":" ▼"):""}</th>`).join("");
   document.querySelectorAll("#cabReg th[data-c]").forEach(th=>th.onclick=()=>{ const c=th.dataset.c; ordenReg = {col:c, asc: ordenReg.col===c ? !ordenReg.asc : c!=="fecha_visita" && c!=="importe_xaf" && c!=="alertas"}; pintarRegistros(); });
   const max = 1000;
-  $("cuerpoReg").innerHTML = fs.length ? fs.slice(0,max).map((v,i)=>`<tr data-id="${esc(v.id)}"><td>${i+1}</td>${COLS_REG.map(([,,f])=>`<td>${f(v)}</td>`).join("")}</tr>`).join("") + (fs.length>max?`<tr><td colspan="${COLS_REG.length+1}" class="vacio">Se muestran los ${max} primeros de ${fs.length}. Use los filtros o la exportación.</td></tr>`:"")
-    : `<tr><td colspan="${COLS_REG.length+1}" class="vacio" style="padding:20px">No hay registros con los filtros actuales. Compruebe las fechas «Desde / Hasta».</td></tr>`;
+  $("cuerpoReg").innerHTML = fs.length ? fs.slice(0,max).map((v,i)=>`<tr data-id="${esc(v.id)}"><td class="sel"><input type="checkbox" class="selReg" data-id="${esc(v.id)}" ${seleccion.has(v.id)?"checked":""}></td><td>${i+1}</td>${COLS_REG.map(([,,f])=>`<td>${f(v)}</td>`).join("")}</tr>`).join("") + (fs.length>max?`<tr><td colspan="${COLS_REG.length+2}" class="vacio">Se muestran los ${max} primeros de ${fs.length}. Use los filtros o la exportación.</td></tr>`:"")
+    : `<tr><td colspan="${COLS_REG.length+2}" class="vacio" style="padding:20px">No hay registros con los filtros actuales. Compruebe las fechas «Desde / Hasta».</td></tr>`;
   document.querySelectorAll("#cuerpoReg tr[data-id]").forEach(tr=>tr.onclick=()=>verFicha(tr.dataset.id));
+  document.querySelectorAll("#cuerpoReg .selReg").forEach(cb=>{ cb.onclick=e=>e.stopPropagation(); cb.onchange=()=>{ cb.checked?seleccion.add(cb.dataset.id):seleccion.delete(cb.dataset.id); pintarSel(); }; });
+  const mostrados = fs.slice(0,max).map(v=>v.id);
+  $("selTodos").checked = mostrados.length>0 && mostrados.every(id=>seleccion.has(id));
+  $("selTodos").onclick = e=>e.stopPropagation();
+  $("selTodos").onchange = e=>{ mostrados.forEach(id=> e.target.checked?seleccion.add(id):seleccion.delete(id)); pintarRegistros(); };
+  pintarSel();
 }
 document.querySelectorAll("#pestanas button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll("#pestanas button").forEach(x=>x.classList.toggle("on", x===b));
@@ -1269,8 +1321,10 @@ $("bImprimir").onclick = () => window.print();
 const cabDoc = (titulo, sub) => `<div class="cabDoc"><img src="${LOGO}" alt="INSESO"><div><div class="s">REPÚBLICA DE GUINEA ECUATORIAL · INSTITUTO DE SEGURIDAD SOCIAL (INSESO)</div><h1>${titulo}</h1><div class="s">Sistema de Mapeo Geográfico de Encamados · ${sub}</div></div></div>`;
 const fila = (k, v) => `<tr><td>${esc(k)}</td><td>${v===null||v===undefined||v===""?'<span class="vacio">—</span>':v}</td></tr>`;
 const tx = v => esc(v ?? "");
+let fichaId = null;
 async function verFicha(id){
   const v = visitas.find(x=>x.id===id); if(!v) return;
+  fichaId = id; $("bCorregir").classList.remove("oculto"); $("bEliminar").classList.remove("oculto");
   const tec = perfiles.get(v.tecnico_id), ed = edad(v.fecha_nacimiento, v.fecha_visita), al = alertasDe(v);
   const nom = {dipA:"DIP – anverso", dipR:"DIP – reverso", carnet:"Carnet del asegurado", casa:"Vivienda (puerta principal)", firmaB:"Firma del beneficiario", firmaR:"Firma del responsable de la visita"};
   const orden = ["dipA","dipR","carnet","casa","firmaB","firmaR"].filter(k=>v.fotos&&v.fotos[k]);
@@ -1292,12 +1346,14 @@ async function verFicha(id){
     `</div></div>` +
     t("VI. Observaciones del equipo visitante", [ fila("Observaciones", tx(v.observaciones)) ]) +
     t("VII. Datos de la visita y validación", [ fila("Fecha de la visita", fFecha(v.fecha_visita)), fila("Personal visitante", tx(tec?tec.nombre:"")), fila("Firma del beneficiario", v.beneficiario_no_firma ? `No puede firmar; firma en su nombre: <b>${tx(v.firmante_nombre)}</b>` : "Firmada por el beneficiario"), fila("Alertas del sistema", al.length ? al.map(([a,c])=>`<span class="tag ${c}">${esc(a)}</span>`).join(" ") : "Ninguna"), fila("Referencia del registro", `<span class="vacio">${tx(v.id)} · recibido ${fFecha(v.recibido)}</span>`) ]) +
+    historialCorrecciones(v) +
     `<h3>Fotografías y firmas</h3>` + (orden.length ? `<div class="galeria">${orden.map(k=>`<figure>${urls[k]?`<a href="${urls[k]}" target="_blank" rel="noopener"><img src="${urls[k]}" alt="${nom[k]}"></a>`:'<div class="vacio">No disponible</div>'}<figcaption>${nom[k]}</figcaption></figure>`).join("")}</div>` : '<p class="vacio">Sin fotografías.</p>') +
     `<div class="pie">Documento generado el ${new Date().toLocaleString("es-ES")} desde el Sistema de Mapeo Geográfico de Encamados del INSESO. Contiene datos personales: uso exclusivo de la comisión de verificación.</div>`;
   $("doc").classList.remove("oculto"); $("doc").scrollTop = 0;
 }
 window.verFicha = verFicha;
 function informeResumen(fs){
+  fichaId = null; $("bCorregir").classList.add("oculto"); $("bEliminar").classList.add("oculto");
   const cnt = (campo, ops) => { const c={}; fs.forEach(v=>{ const k=v[campo]||"Sin respuesta"; c[k]=(c[k]||0)+1; }); const ks=[...ops.filter(o=>c[o]), ...Object.keys(c).filter(k=>!ops.includes(k))]; return ks.map(k=>[k,c[k]]); };
   const tabla = (titulo, filas) => { const tot=filas.reduce((s,f)=>s+f[1],0)||1; return `<h3>${titulo}</h3><table class="l"><tr><th style="text-align:left">Categoría</th><th>Visitas</th><th>%</th></tr>${filas.map(([k,n])=>`<tr><td>${esc(k)}</td><td style="text-align:right">${n}</td><td style="text-align:right">${Math.round(n*100/tot)}%</td></tr>`).join("")||'<tr><td colspan="3">Sin datos</td></tr>'}</table>`; };
   const agrupa = f => { const c={}; fs.forEach(v=>{ const k=f(v)||"Sin dato"; c[k]=(c[k]||0)+1; }); return Object.entries(c).sort((a,b)=>b[1]-a[1]); };
@@ -1315,11 +1371,176 @@ function informeResumen(fs){
   $("doc").classList.remove("oculto"); $("doc").scrollTop = 0;
 }
 
+/* ---------- Corrección y eliminación de registros (supervisor) ---------- */
+const OPC = {
+  tipo_invalidez:["Invalidez permanente parcial","Invalidez permanente total","Invalidez permanente absoluta","Gran invalidez","Otra"],
+  provincia:["Bioko Norte","Bioko Sur","Annobón","Litoral","Centro Sur","Kié-Ntem","Wele-Nzas","Djibloho"],
+  cobrador_tipo:["El propio beneficiario","Un familiar","Un representante autorizado","Otra persona"],
+  sino:["Sí","No"], cobro_regular:["Sí","No","Algunas veces"], medicamentos:["Sí","No","Parcialmente"],
+  satisfaccion:["Muy satisfecho","Satisfecho","Poco satisfecho","Insatisfecho"]
+};
+// [campo, etiqueta, tipo, opciones]   tipos: txt, area, ent (número entero), dec (decimal), fecha, fechaNR, mesNR, sel, bool
+const EDITABLES = [
+  ["I. Datos del beneficiario", [
+    ["nombre","Nombre completo *","txt"], ["dip_numero","Número de DIP","txt"], ["telefono","Teléfono","txt"],
+    ["fecha_nacimiento","Fecha de nacimiento","fecha"], ["tipo_invalidez","Tipo de invalidez","sel",OPC.tipo_invalidez],
+    ["descripcion_invalidez","Descripción de la invalidez","txt"], ["meses_encamado","Tiempo encamado (meses)","ent"],
+    ["importe_xaf","Importe que cobra (XAF)","ent"]]],
+  ["Ubicación del domicilio", [
+    ["localidad","Localidad","txt"], ["provincia","Provincia","sel",OPC.provincia], ["localidad_confirmada","Localidad confirmada","bool"],
+    ["lat","Latitud de la puerta principal","dec"], ["lon","Longitud de la puerta principal","dec"]]],
+  ["II. Historial laboral y administrativo", [
+    ["fue_funcionario","¿Fue funcionario?","sel",OPC.sino], ["empleador","Ministerio o empresa","txt"], ["cargo","Cargo o función","txt"],
+    ["anios_servicio","Años de servicio","ent"], ["fecha_cese","Desde cuándo cobra la pensión (aaaa-mm)","mesNR"],
+    ["ultima_actividad","Última vez en activo (aaaa-mm)","mesNR"]]],
+  ["III. Situación actual del cobro", [
+    ["cobrador_tipo","Quién cobra la pensión","sel",OPC.cobrador_tipo], ["cobra_tercero","Nombre de quien cobra (si no es el beneficiario)","txt"],
+    ["parentesco","Parentesco o tipo de representación","txt"], ["fechas_cobro","Fechas habituales de cobro","txt"],
+    ["ultimo_pago","Último pago (aaaa-mm-dd)","fechaNR"], ["cobro_regular","¿Cobra regularmente?","sel",OPC.cobro_regular],
+    ["retrasos","¿Retrasos o dificultades?","sel",OPC.sino], ["retrasos_detalle","Detalle de los retrasos","txt"]]],
+  ["IV. Valoración y satisfacción", [
+    ["satisfaccion","Satisfacción con el INSESO","sel",OPC.satisfaccion], ["quejas","Quejas, reclamaciones o sugerencias","area"]]],
+  ["V. Situación socioasistencial", [
+    ["cuidador","Quién se ocupa de sus cuidados","txt"], ["asistencia_medica","¿Asistencia médica periódica?","sel",OPC.sino],
+    ["medicamentos","¿Medicamentos y cuidados necesarios?","sel",OPC.medicamentos], ["necesita_apoyo","¿Necesita apoyo adicional?","sel",OPC.sino],
+    ["apoyo_detalle","Qué apoyo necesita","txt"]]],
+  ["VI y VII. Observaciones y firma", [
+    ["observaciones","Observaciones del equipo visitante","area"], ["beneficiario_no_firma","El beneficiario no puede firmar","bool"],
+    ["firmante_nombre","Firma en su nombre","txt"]]]
+];
+const ETIQ = Object.fromEntries(EDITABLES.flatMap(([,cs])=>cs.map(c=>[c[0], c[1].replace(/ \*$/,"").replace(/ \(aaaa-mm(-dd)?\)$/,"")])));
+let seleccion = new Set(), edId = null;
+function pintarSel(){ const n=[...seleccion].filter(id=>visitas.some(v=>v.id===id)).length; $("nSel").textContent=n; $("bEliminarSel").disabled=!n; }
+function quitarLocal(ids){
+  const s=new Set(ids); visitas = visitas.filter(v=>!s.has(v.id)); ids.forEach(id=>seleccion.delete(id));
+  if(fichaId && s.has(fichaId)){ $("doc").classList.add("oculto"); fichaId=null; }
+  pintar();
+}
+function historialCorrecciones(v){
+  const cs = Array.isArray(v.correcciones) ? v.correcciones : [];
+  if(!cs.length) return "";
+  return `<h3>Correcciones del supervisor</h3><table class="f">` + cs.map(c=>`<tr><td>${esc(fFecha(c.fecha))}<br><span class="vacio">${esc(c.por||"")}</span></td><td><b>Motivo:</b> ${esc(c.motivo||"")}<br>` +
+    Object.entries(c.cambios||{}).map(([k,[a,b]])=>`${esc(ETIQ[k]||k)}: <s>${esc(a??"—")}</s> → <b>${esc(b??"—")}</b>`).join("<br>") + `</td></tr>`).join("") + `</table>`;
+}
+function inputDe(c, v){
+  const [k, et, t, opc] = c, val = v[k];
+  const s = val==null ? "" : String(val);
+  let campo;
+  if(t==="sel") campo = `<select data-k="${k}"><option value="">—</option>${[...new Set([...(opc||[]), ...(s&&!(opc||[]).includes(s)?[s]:[])])].map(o=>`<option ${o===s?"selected":""}>${esc(o)}</option>`).join("")}</select>`;
+  else if(t==="area") campo = `<textarea data-k="${k}">${esc(s)}</textarea>`;
+  else if(t==="bool") return `<label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" data-k="${k}" ${val?"checked":""}> ${esc(et)}</label>`;
+  else if(t==="fecha") campo = `<input type="date" data-k="${k}" value="${esc(s.slice(0,10))}">`;
+  else campo = `<input data-k="${k}" value="${esc(s)}" ${t==="ent"?'inputmode="numeric"':t==="dec"?'inputmode="decimal"':""} ${t==="mesNR"?'placeholder="aaaa-mm o No recuerda"':t==="fechaNR"?'placeholder="aaaa-mm-dd o No recuerda"':""}>`;
+  return `<label>${esc(et)}${campo}</label>`;
+}
+function leerCampo(c, el){
+  const [k, et, t] = c;
+  if(t==="bool") return el.checked;
+  const x = el.value.trim();
+  if(x==="") return null;
+  if(t==="ent"){ const n=x.replace(/[.\s]/g,""); if(!/^\d+$/.test(n)) throw new Error(`«${et}»: escriba solo cifras.`); return parseInt(n,10); }
+  if(t==="dec"){ const n=Number(x.replace(",",".")); if(!isFinite(n)) throw new Error(`«${et}»: número no válido.`); return n; }
+  if(t==="mesNR" && !/^\d{4}-\d{2}$|^No recuerda$/.test(x)) throw new Error(`«${et}»: use aaaa-mm (ej.: 2015-06) o «No recuerda».`);
+  if(t==="fechaNR" && !/^\d{4}-\d{2}-\d{2}$|^No recuerda$/.test(x)) throw new Error(`«${et}»: use aaaa-mm-dd (ej.: 2026-10-30) o «No recuerda».`);
+  return x;
+}
+function iguales(a, b){ if(a==null||a==="") a=null; if(b==null||b==="") b=null; if(typeof a==="number"||typeof b==="number") return a!=null&&b!=null ? Number(a)===Number(b) : a===b; if(typeof a==="boolean"||typeof b==="boolean") return !!a===!!b; return String(a??"").slice(0, a&&/^\d{4}-\d{2}-\d{2}T/.test(a)?10:undefined)===String(b??""); }
+function msgEd(id, t, mal){ const el=$(id); el.className="msg"+(mal?" mal":""); el.innerHTML=t; el.classList.remove("oculto"); }
+function abrirCorreccion(id){
+  const v = visitas.find(x=>x.id===id); if(!v) return;
+  edId = id;
+  $("edCampos").innerHTML = EDITABLES.map(([tit, cs])=>{ const vis = cs.filter(c=>c[0] in v); return vis.length ? `<h3>${esc(tit)}</h3><div class="edRej">${vis.map(c=>inputDe(c,v)).join("")}</div>` : ""; }).join("") +
+    `<div class="vacio" style="margin-top:8px">Visita del ${esc(fFecha(v.fecha_visita))} registrada por ${esc((perfiles.get(v.tecnico_id)||{}).nombre||"—")}.</div>`;
+  $("edCampos").querySelectorAll("[data-k]").forEach(el=>el.addEventListener("input", ()=>{
+    const c = EDITABLES.flatMap(([,cs])=>cs).find(c=>c[0]===el.dataset.k); let nv; try{ nv=leerCampo(c, el); }catch(e){ nv=el.value; }
+    el.closest("label").classList.toggle("cambiado", !iguales(v[c[0]], nv)); }));
+  $("edMotivo").value=""; $("edMsg").classList.add("oculto");
+  $("modalEd").classList.remove("oculto"); $("modalEd").scrollTop=0;
+}
+$("bCorregir").onclick = () => fichaId && abrirCorreccion(fichaId);
+$("bCerrarEd").onclick = () => $("modalEd").classList.add("oculto");
+$("fEd").onsubmit = async ev => {
+  ev.preventDefault();
+  const v = visitas.find(x=>x.id===edId); if(!v) return;
+  const cambios = {}, nuevos = {};
+  try{
+    for(const c of EDITABLES.flatMap(([,cs])=>cs)){
+      const el = $("edCampos").querySelector(`[data-k="${c[0]}"]`); if(!el) continue;
+      const nv = leerCampo(c, el);
+      if(!iguales(v[c[0]], nv)){ cambios[c[0]] = [v[c[0]] ?? null, nv]; nuevos[c[0]] = nv; }
+    }
+    if("nombre" in nuevos && !nuevos.nombre) throw new Error("El nombre completo no puede quedar vacío.");
+    if("lat" in nuevos && (nuevos.lat==null || nuevos.lat<-90 || nuevos.lat>90)) throw new Error("Latitud fuera de rango.");
+    if("lon" in nuevos && (nuevos.lon==null || nuevos.lon<-180 || nuevos.lon>180)) throw new Error("Longitud fuera de rango.");
+  }catch(e){ msgEd("edMsg", esc(e.message), true); return; }
+  if(!Object.keys(nuevos).length){ msgEd("edMsg", "No ha cambiado ningún dato.", true); return; }
+  const motivo = $("edMotivo").value.trim(); if(motivo.length<5){ msgEd("edMsg","Indique el motivo de la corrección.",true); return; }
+  const yo = perfiles.get(miIdActual()) || {};
+  const hist = (Array.isArray(v.correcciones)?v.correcciones:[]).concat([{fecha:new Date().toISOString(), por:yo.nombre||$("uNombre").textContent, por_id:miIdActual(), motivo, cambios}]);
+  $("bGuardarEd").disabled = true;
+  try{
+    const {data, error} = await sb.from("visitas").update({...nuevos, correcciones:hist, corregido_en:new Date().toISOString(), corregido_por:miIdActual()}).eq("id", v.id).select();
+    if(error) throw error;
+    if(!data || !data.length) throw new Error("Supabase no ha guardado la corrección: falta ejecutar el script 03_supervisor_corregir_eliminar.sql.");
+    const i = visitas.findIndex(x=>x.id===v.id); visitas[i] = data[0];
+    $("modalEd").classList.add("oculto"); pintar(); await verFicha(v.id);
+  }catch(e){ msgEd("edMsg", esc(errorSupabase(e)), true); }
+  finally{ $("bGuardarEd").disabled = false; }
+};
+function errorSupabase(e){
+  const m = String((e && (e.message||e.error)) || e);
+  if(/column .*(correcciones|corregido)|visitas_eliminadas|schema cache|does not exist/i.test(m)) return "Falta ejecutar en Supabase el script 03_supervisor_corregir_eliminar.sql. ("+m+")";
+  if(/row-level security|permission denied|42501/i.test(m)) return "Supabase no permite esta operación a su usuario: ejecute el script 03_supervisor_corregir_eliminar.sql y compruebe que su cuenta es de supervisor y está activa. ("+m+")";
+  return m;
+}
+function miIdActual(){ return sesion && sesion.user ? sesion.user.id : null; }
+let aEliminar = [];
+function abrirEliminacion(ids){
+  aEliminar = ids.filter(id=>visitas.some(v=>v.id===id)); if(!aEliminar.length) return;
+  $("delLista").innerHTML = `<p>Va a eliminar <b>${aEliminar.length}</b> registro(s):</p>` + aEliminar.slice(0,50).map(id=>{ const v=visitas.find(x=>x.id===id);
+    return `<div class="delFila"><b>${esc(v.nombre)}</b> · ${esc(v.localidad||"sin localidad")} · ${esc(fFecha(v.fecha_visita))} · ${esc((perfiles.get(v.tecnico_id)||{}).nombre||"")}</div>`; }).join("") + (aEliminar.length>50?`<div class="vacio">… y ${aEliminar.length-50} más</div>`:"");
+  $("delMotivo").value=""; $("delConf").value=""; $("delMsg").classList.add("oculto");
+  $("modalDel").classList.remove("oculto");
+}
+$("bEliminar").onclick = () => fichaId && abrirEliminacion([fichaId]);
+$("bEliminarSel").onclick = () => abrirEliminacion([...seleccion]);
+$("bCerrarDel").onclick = () => $("modalDel").classList.add("oculto");
+$("fDel").onsubmit = async ev => {
+  ev.preventDefault();
+  const motivo = $("delMotivo").value.trim();
+  if(motivo.length<5){ msgEd("delMsg","Indique el motivo.",true); return; }
+  if($("delConf").value.trim()!=="ELIMINAR"){ msgEd("delMsg","Escriba ELIMINAR en mayúsculas para confirmar.",true); return; }
+  $("bConfDel").disabled = true;
+  const hechos = [], fallos = [];
+  try{
+    for(const id of aEliminar){
+      const v = visitas.find(x=>x.id===id); if(!v) continue;
+      msgEd("delMsg", `Eliminando ${hechos.length+fallos.length+1} de ${aEliminar.length}…`);
+      try{
+        const {error:e1} = await sb.from("visitas_eliminadas").insert({visita_id:v.id, datos:v, motivo, eliminado_por:miIdActual()});
+        if(e1) throw e1;
+        const {data, error:e2} = await sb.from("visitas").delete().eq("id", v.id).select("id");
+        if(e2) throw e2;
+        if(!data || !data.length) throw new Error("Supabase no ha borrado el registro: falta ejecutar el script 03_supervisor_corregir_eliminar.sql.");
+        const rutas = Object.values(v.fotos||{}).filter(Boolean);
+        if(rutas.length){ const {error:e3} = await sb.storage.from("fotos").remove(rutas); if(e3) console.warn("Fotos no borradas", e3); }
+        hechos.push(id);
+      }catch(e){ fallos.push(`${v.nombre}: ${errorSupabase(e)}`); }
+    }
+  } finally {
+    $("bConfDel").disabled = false;
+    if(hechos.length) quitarLocal(hechos);
+    if(fallos.length) msgEd("delMsg", `${hechos.length} eliminado(s). No se pudieron eliminar ${fallos.length}:<br>${fallos.map(esc).join("<br>")}`, true);
+    else { $("modalDel").classList.add("oculto"); alert(`${hechos.length} registro(s) eliminado(s).`); }
+  }
+};
+
 /* ---------- Tiempo real ---------- */
 function suscribir(){
   if(canal) sb.removeChannel(canal);
   canal = sb.channel("panel-encamados")
     .on("postgres_changes", {event:"*", schema:"public", table:"visitas"}, ev => {
+      if(ev.eventType==="DELETE"){ const idb=ev.old&&ev.old.id; if(idb){ quitarLocal([idb]); } return; }
       const v=ev.new; if(!v || !v.id) return;
       const i=visitas.findIndex(x=>x.id===v.id); if(i>=0) visitas[i]=v; else visitas.unshift(v);
       pintar(); $("vivo").textContent="● nueva visita "+new Date().toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"});
